@@ -1,0 +1,40 @@
+name: Nightly database backup
+
+on:
+  schedule:
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install postgresql-client
+        run: sudo apt-get install -y postgresql-client
+
+      - name: Run pg_dump
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          TIMESTAMP=$(date +%Y-%m-%d)
+          pg_dump "$DATABASE_URL" \
+            --format=plain \
+            --no-owner \
+            --no-acl \
+            | gzip > "makerbase-backup-${TIMESTAMP}.sql.gz"
+          echo "Backup created:"
+          ls -lh makerbase-backup-*.sql.gz
+
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: makerbase-backup-${{ github.run_id }}
+          path: makerbase-backup-*.sql.gz
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Alert on failure
+        if: failure()
+        run: |
+          echo "::error::Nightly backup FAILED. Check that DATABASE_URL is set in repository secrets."

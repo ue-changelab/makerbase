@@ -1,0 +1,41 @@
+:root {
+  --bg-primary: #f4f6f3;
+  --bg-surface: #ffffff;
+  --bg-nav: #2d4a3e;
+  --accent: #4a7c59;
+  --accent-dark: #2d4a3e;
+  --accent-light: #4a7c5920;
+  --text-primary: #2d4a3e;
+  --text-secondary: #7a9485;
+  --text-inverse: #ffffff;
+  --text-muted: #a8c4b0;
+  --border: #dde8d8;
+  --danger: #c0392b;
+  --danger-light: #c0392b20;
+  --warning: #e67e22;
+  --warning-light: #e67e2220;
+  --success: #4a7c59;
+  --success-light: #4a7c5920;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --shadow-sm: 0 1px 3px rgba(45,74,62,0.08);
+  --shadow-md: 0 4px 12px rgba(45,74,62,0.12);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.6;
+}
+
+button { cursor: pointer; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }

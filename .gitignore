@@ -1,0 +1,7 @@
+node_modules/
+.env
+dist/
+backups/*.sql
+backups/*.sql.gz
+*.local
+.DS_Store
