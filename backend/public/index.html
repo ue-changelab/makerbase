@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MakerBase — Staff</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+/* ── styles.css verbatim ── */
+:root{--bg:#faf6ef;--bg-tint:#f2ebdd;--bg-deep:#1a0e2e;--ink:#1a0e2e;--ink-soft:#4a3d5c;--ink-muted:#7a6f86;--rule:#e2d9c7;--purple:#4c1d6b;--purple-deep:#2d0f44;--purple-soft:#f1e8f7;--orange:#ec6a2a;--orange-deep:#c4501c;--orange-soft:#fde6d6;--gold:#e8b24a;--success:#2f7d5b;--danger:#b83b2b;--r-sm:4px;--r-md:8px;--r-lg:14px;--r-xl:22px;--font-display:'Fraunces','Times New Roman',serif;--font-body:'Inter',system-ui,-apple-system,sans-serif;--font-mono:'JetBrains Mono',ui-monospace,monospace;--maxw:1280px}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:none}
+a{color:inherit;text-decoration:none}
+.eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-muted)}
+.eyebrow .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--orange);margin-right:10px;vertical-align:middle;transform:translateY(-1px)}
+.btn{display:inline-flex;align-items:center;gap:10px;padding:11px 20px;border-radius:999px;font-size:14px;font-weight:500;transition:all 180ms}
+.btn-primary{background:var(--purple);color:var(--bg)}
+.btn-primary:hover{background:var(--purple-deep)}
+.btn-soft{background:var(--bg-tint);color:var(--ink)}
+.btn-soft:hover{background:var(--rule)}
+.btn-accent{background:var(--orange);color:#fff}
+.btn-accent:hover{background:var(--orange-deep)}
+.field{margin-bottom:18px}
+.field label{display:block;font-size:12px;font-family:var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-muted);margin-bottom:7px}
+.field input,.field select,.field textarea{width:100%;padding:11px 14px;border-radius:var(--r-md);border:1px solid var(--rule);background:var(--bg);font-size:15px;outline:none;transition:border-color 150ms,box-shadow 150ms}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--purple);box-shadow:0 0 0 3px var(--purple-soft)}
+select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--ink-soft) 50%),linear-gradient(135deg,var(--ink-soft) 50%,transparent 50%);background-position:calc(100% - 18px) center,calc(100% - 13px) center;background-size:5px 5px;background-repeat:no-repeat;padding-right:36px}
+/* ── staff.css verbatim ── */
+.app{min-height:100vh;display:grid;grid-template-columns:240px 1fr;background:var(--bg)}
+.sidebar{background:var(--bg-deep);color:var(--bg);padding:24px 20px;display:flex;flex-direction:column;gap:8px;position:sticky;top:0;height:100vh;overflow-y:auto}
+.sidebar-brand{display:flex;align-items:center;gap:12px;font-family:var(--font-display);font-size:20px;margin-bottom:28px}
+.sidebar-brand .mark{width:32px;height:32px;border-radius:8px;background:var(--bg);color:var(--purple);display:grid;place-items:center;font-family:var(--font-mono);font-weight:600;font-size:14px;position:relative}
+.sidebar-brand .mark::after{content:"";position:absolute;inset:-3px -3px auto auto;width:8px;height:8px;border-radius:50%;background:var(--orange)}
+.sidebar-section{font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:rgba(250,246,239,.4);padding:16px 10px 8px}
+.sidebar a{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--r-md);font-size:14px;color:rgba(250,246,239,.7);transition:all 140ms;cursor:pointer}
+.sidebar a:hover{background:rgba(250,246,239,.06);color:var(--bg)}
+.sidebar a.active{background:var(--purple);color:var(--bg)}
+.sidebar a.active .ico{background:var(--orange);color:#fff}
+.sidebar a .ico{width:24px;height:24px;border-radius:6px;background:rgba(250,246,239,.08);color:var(--bg);display:grid;place-items:center;font-family:var(--font-mono);font-size:11px;font-weight:600;transition:all 140ms}
+.sidebar a .count{margin-left:auto;font-family:var(--font-mono);font-size:11px;color:rgba(250,246,239,.5)}
+.sidebar a.active .count{color:var(--bg)}
+.sidebar-user{margin-top:auto;padding:14px 12px;border-top:1px solid rgba(250,246,239,.1);display:flex;align-items:center;gap:12px;font-size:13px}
+.sidebar-user .avatar{width:32px;height:32px;border-radius:50%;background:var(--orange);color:#fff;display:grid;place-items:center;font-family:var(--font-mono);font-weight:600;font-size:12px}
+.sidebar-user .name{color:var(--bg)}
+.sidebar-user .role{font-size:11px;color:rgba(250,246,239,.5);font-family:var(--font-mono);letter-spacing:.08em;text-transform:uppercase}
+.main{min-height:100vh;overflow-x:hidden}
+.page-header{padding:36px 48px 28px;border-bottom:1px solid var(--rule);display:flex;justify-content:space-between;align-items:flex-end;gap:24px;flex-wrap:wrap}
+.page-header .eyebrow{margin-bottom:10px}
+.page-header h1{font-family:var(--font-display);font-size:44px;letter-spacing:-.025em;line-height:1;font-weight:500}
+.page-header h1 em{font-style:italic;color:var(--purple);font-weight:400}
+.page-header .subtitle{margin-top:8px;color:var(--ink-soft);font-size:15px}
+.page-actions{display:flex;gap:10px;align-items:center}
+.page-body{padding:36px 48px 80px}
+.toolbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:24px}
+.search{flex:1;min-width:260px;padding:10px 14px;border:1px solid var(--rule);border-radius:var(--r-md);background:var(--bg);font-size:14px;display:flex;align-items:center;gap:10px}
+.search::before{content:"⌕";color:var(--ink-muted);font-size:16px}
+.search input{border:none;outline:none;flex:1;background:transparent}
+.chip{padding:6px 14px;border-radius:999px;background:var(--bg-tint);color:var(--ink);font-family:var(--font-mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;border:1px solid transparent;transition:all 140ms}
+.chip:hover{border-color:var(--rule)}
+.chip.active{background:var(--purple);color:var(--bg)}
+.card{border:1px solid var(--rule);border-radius:var(--r-lg);background:var(--bg);padding:22px}
+.card h3{font-family:var(--font-display);font-size:20px;font-weight:500;margin-bottom:4px;letter-spacing:-.015em}
+.card h3 em{font-style:italic;color:var(--purple);font-weight:400}
+.card-sub{font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-muted)}
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:28px}
+.kpi{padding:22px 24px;border:1px solid var(--rule);border-radius:var(--r-lg);background:var(--bg);position:relative;overflow:hidden}
+.kpi-label{font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-muted)}
+.kpi-value{font-family:var(--font-display);font-size:42px;font-weight:500;letter-spacing:-.02em;margin-top:8px;line-height:1}
+.kpi-value em{color:var(--purple);font-style:italic;font-weight:400}
+.kpi-delta{margin-top:10px;font-size:12px;font-family:var(--font-mono);color:var(--ink-muted);letter-spacing:.06em;text-transform:uppercase}
+.kpi-accent{border-top:3px solid var(--purple)}
+.kpi-accent-orange{border-top:3px solid var(--orange)}
+.table{width:100%;border-collapse:collapse;font-size:14px}
+.table thead th{text-align:left;padding:12px 16px;font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-muted);font-weight:500;border-bottom:1px solid var(--rule);background:var(--bg-tint)}
+.table tbody td{padding:14px 16px;border-bottom:1px solid var(--rule);vertical-align:middle}
+.table tbody tr:hover{background:var(--bg-tint);cursor:pointer}
+.table tbody tr:last-child td{border-bottom:none}
+.table .lead{font-weight:500;color:var(--ink)}
+.table .sub{font-size:12px;color:var(--ink-muted);margin-top:2px}
+.avatar-sm{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--purple);color:var(--bg);font-family:var(--font-mono);font-weight:600;font-size:11px;margin-right:10px;vertical-align:middle}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase}
+.pill::before{content:"●";font-size:9px}
+.pill-open{background:#e3f1ea;color:var(--success)}
+.pill-full{background:var(--orange-soft);color:var(--orange-deep)}
+.pill-plan{background:var(--purple-soft);color:var(--purple)}
+.pill-done{background:var(--bg-tint);color:var(--ink-muted)}
+.pill-cancel{background:#fbe5e1;color:var(--danger)}
+.pill-avail{background:#e3f1ea;color:var(--success)}
+.pill-out{background:var(--orange-soft);color:var(--orange-deep)}
+.pill-maint{background:#f4ebd8;color:#a67c1c}
+.cap-bar{display:flex;align-items:center;gap:10px}
+.cap-bar-track{flex:1;height:6px;background:var(--bg-tint);border-radius:99px;overflow:hidden;max-width:140px}
+.cap-bar-fill{height:100%;background:var(--purple);border-radius:99px;transition:width 240ms}
+.cap-bar-fill.full{background:var(--orange)}
+.cap-bar-text{font-family:var(--font-mono);font-size:12px;color:var(--ink-muted);letter-spacing:.06em}
+.today-ribbon{background:var(--purple);color:var(--bg);padding:24px 28px;border-radius:var(--r-lg);display:flex;justify-content:space-between;align-items:center;gap:24px;margin-bottom:28px;position:relative;overflow:hidden}
+.today-ribbon::after{content:"";position:absolute;top:-80px;right:-80px;width:240px;height:240px;border-radius:50%;background:var(--orange);opacity:.9}
+.today-ribbon .content{position:relative;z-index:1}
+.today-ribbon .label{font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:rgba(250,246,239,.7)}
+.today-ribbon h2{font-family:var(--font-display);font-size:32px;font-weight:500;letter-spacing:-.02em;margin-top:8px}
+.today-ribbon h2 em{font-style:italic;font-weight:400}
+.today-ribbon .meta{margin-top:10px;font-family:var(--font-mono);font-size:12px;letter-spacing:.06em;color:rgba(250,246,239,.85)}
+.today-ribbon .actions{position:relative;z-index:1;display:flex;gap:10px}
+.today-ribbon .btn{background:var(--bg);color:var(--purple);padding:10px 16px}
+.empty{padding:60px 20px;text-align:center;color:var(--ink-muted);font-size:14px;border:1px dashed var(--rule);border-radius:var(--r-lg)}
+.signin{min-height:100vh;display:grid;grid-template-columns:1fr 1fr;background:var(--bg)}
+.signin-visual{background:var(--purple);color:var(--bg);padding:48px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden}
+.signin-visual::after{content:"";position:absolute;bottom:-140px;right:-140px;width:440px;height:440px;border-radius:50%;background:var(--orange);opacity:.9}
+.signin-visual .content{position:relative;z-index:1}
+.signin-visual h1{font-family:var(--font-display);font-size:64px;letter-spacing:-.03em;line-height:.95;font-weight:500;margin-top:40px}
+.signin-visual h1 em{font-style:italic;color:var(--orange);font-weight:400}
+.signin-visual .lead{font-size:17px;color:rgba(250,246,239,.85);margin-top:20px;max-width:440px}
+.signin-visual .quote{position:relative;z-index:1;font-family:var(--font-display);font-style:italic;font-size:18px;border-left:2px solid var(--orange);padding-left:18px;opacity:.9;max-width:360px}
+.signin-visual .quote cite{display:block;font-family:var(--font-mono);font-style:normal;font-size:11px;letter-spacing:.1em;text-transform:uppercase;margin-top:10px;opacity:.7}
+.signin-form-wrap{display:flex;align-items:center;justify-content:center;padding:48px}
+.signin-form{width:100%;max-width:400px}
+.signin-form h2{font-family:var(--font-display);font-size:36px;letter-spacing:-.02em;line-height:1.05;font-weight:500;margin-bottom:8px}
+.signin-form h2 em{font-style:italic;color:var(--purple);font-weight:400}
+.signin-form .lead{color:var(--ink-soft);margin-bottom:30px}
+.signin-links{margin-top:24px;padding-top:24px;border-top:1px solid var(--rule)}
+.signin-links h5{font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-muted);margin-bottom:12px}
+/* Upload zone */
+.upload-zone{border:2px dashed var(--rule);border-radius:var(--r-lg);padding:48px;text-align:center;cursor:pointer;transition:all 200ms;background:var(--bg-tint)}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--purple);background:var(--purple-soft)}
+.upload-zone input{display:none}
+.upload-icon{font-size:36px;margin-bottom:12px}
+.upload-text{font-family:var(--font-display);font-size:22px;font-weight:500;margin-bottom:6px}
+.upload-sub{font-size:13px;color:var(--ink-muted);font-family:var(--font-mono);letter-spacing:.06em}
+.result-banner{border-radius:var(--r-md);padding:16px 20px;margin-bottom:20px;display:flex;align-items:flex-start;gap:12px;font-size:14px}
+.result-banner.success{background:#e3f1ea;border:1px solid #b8dfc8;color:var(--success)}
+.result-banner.error{background:#fbe5e1;border:1px solid #f0b8b0;color:var(--danger)}
+/* Status select */
+select.status-sel{background:var(--bg);border:1px solid var(--rule);border-radius:var(--r-sm);color:var(--ink);padding:4px 28px 4px 8px;font-size:12px;font-family:var(--font-mono);letter-spacing:.06em;width:auto}
+/* Error state */
+.error-msg{background:#fbe5e1;color:var(--danger);padding:10px 14px;border-radius:var(--r-md);font-size:13px;margin-bottom:16px}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useCallback } = React;
+const API_BASE = '';
+
+// ── API helper ─────────────────────────────────────────────────────────────
+function getToken() { return localStorage.getItem('mb_token'); }
+async function api(method, path, body, isForm) {
+  const opts = { method, headers: { Authorization: `Bearer ${getToken()}` } };
+  if (isForm) { opts.body = body; }
+  else if (body) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+  const r = await fetch(API_BASE + path, opts);
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+  return data;
+}
+
+// ── Sign In ────────────────────────────────────────────────────────────────
+function SignIn({ onSignIn }) {
+  const [email, setEmail] = useState('priya@evansville.edu');
+  const [password, setPassword] = useState('');
+  const [err, setErr] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  async function submit(e) {
+    e.preventDefault();
+    setErr(''); setLoading(true);
+    try {
+      const { token, user } = await api('POST', '/api/auth/login', { email, password });
+      localStorage.setItem('mb_token', token);
+      localStorage.setItem('mb_user', JSON.stringify(user));
+      onSignIn(user);
+    } catch (e) { setErr(e.message); }
+    finally { setLoading(false); }
+  }
+
+  return (
+    <div className="signin">
+      <aside className="signin-visual">
+        <div className="content">
+          <div style={{display:'flex',alignItems:'center',gap:12,fontFamily:'var(--font-display)',fontSize:22}}>
+            <span style={{width:34,height:34,borderRadius:8,background:'var(--bg)',color:'var(--purple)',display:'grid',placeItems:'center',fontFamily:'var(--font-mono)',fontWeight:600,fontSize:14}}>M</span>
+            MakerBase
+          </div>
+          <h1>The ChangeLab<br/><em>operations hub.</em></h1>
+          <p className="lead">Track camps, manage equipment, log sessions, import spreadsheets. Built for staff.</p>
+        </div>
+        <div className="quote">
+          If it happened in the lab, it lives in MakerBase.
+          <cite>— Shop convention, since 2024</cite>
+        </div>
+      </aside>
+      <div className="signin-form-wrap">
+        <form className="signin-form" onSubmit={submit}>
+          <div className="eyebrow" style={{marginBottom:14}}><span className="dot"></span>Staff sign-in</div>
+          <h2>Welcome <em>back.</em></h2>
+          <p className="lead">Use your UE staff credentials.</p>
+          {err && <div className="error-msg">{err}</div>}
+          <div className="field"><label>Email</label><input type="email" value={email} onChange={e=>setEmail(e.target.value)} required /></div>
+          <div className="field"><label>Password</label><input type="password" value={password} onChange={e=>setPassword(e.target.value)} required /></div>
+          <button type="submit" className="btn btn-primary" style={{width:'100%',justifyContent:'center'}} disabled={loading}>
+            {loading ? 'Signing in…' : 'Sign in →'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Sidebar ────────────────────────────────────────────────────────────────
+function Sidebar({ view, setView, user, onSignOut }) {
+  const groups = [
+    { group:'Overview', items:[{ id:'home', label:'Today', ico:'◆' }]},
+    { group:'Import', items:[{ id:'import', label:'Import data', ico:'↓' }, { id:'logs', label:'Import logs', ico:'≡' }]},
+    { group:'Programs', items:[
+      { id:'camps', label:'Dance Camp', ico:'C' },
+      { id:'changelabs', label:'ChangeLabs', ico:'✦' },
+    ]},
+    { group:'People & gear', items:[
+      { id:'members', label:'Members', ico:'M' },
+      { id:'equipment', label:'Equipment', ico:'E' },
+      { id:'partners', label:'Partners', ico:'P' },
+    ]},
+  ];
+  return (
+    <aside className="sidebar">
+      <div className="sidebar-brand">
+        <span className="mark">M</span>
+        MakerBase
+      </div>
+      {groups.map(g => (
+        <React.Fragment key={g.group}>
+          <div className="sidebar-section">{g.group}</div>
+          {g.items.map(it => (
+            <a key={it.id} className={view===it.id?'active':''} onClick={()=>setView(it.id)}>
+              <span className="ico">{it.ico}</span>
+              <span>{it.label}</span>
+            </a>
+          ))}
+        </React.Fragment>
+      ))}
+      <div className="sidebar-user">
+        <span className="avatar">{user?.initials || '?'}</span>
+        <div>
+          <div className="name">{user?.name}</div>
+          <div className="role">{user?.role}</div>
+        </div>
+        <button onClick={onSignOut} style={{marginLeft:'auto',color:'rgba(250,246,239,.4)',fontSize:18}} title="Sign out">↩</button>
+      </div>
+    </aside>
+  );
+}
+
+// ── Today / Home ────────────────────────────────────────────────────────────
+function PageToday({ setView, user }) {
+  const [stats, setStats] = useState(null);
+
+  useEffect(() => {
+    Promise.all([
+      api('GET', '/api/import/roster/dance_camp').catch(()=>[]),
+      api('GET', '/api/members').catch(()=>[]),
+      api('GET', '/api/equipment').catch(()=>[]),
+      api('GET', '/api/changelabs').catch(()=>[]),
+      api('GET', '/api/import/logs').catch(()=>[]),
+    ]).then(([campers, members, equip, labs, logs]) => {
+      setStats({
+        campers: campers.length,
+        confirmed: campers.filter(c=>c.status==='confirmed').length,
+        members: members.length,
+        activeMembers: members.filter(m=>m.status==='active').length,
+        equipOut: equip.filter(e=>e.status==='checked_out').length,
+        equip: equip.length,
+        activeLabs: labs.filter(l=>l.status==='in_progress').length,
+        labs: labs.length,
+        imports: logs.length,
+      });
+    });
+  }, []);
+
+  const now = new Date();
+  const greeting = now.getHours() < 12 ? 'morning' : now.getHours() < 17 ? 'afternoon' : 'evening';
+  const firstName = user?.name?.split(' ')[0] || 'there';
+
+  return (
+    <div>
+      <div className="page-header">
+        <div>
+          <div className="eyebrow"><span className="dot"></span>{now.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'})}</div>
+          <h1>Good {greeting}, <em>{firstName}.</em></h1>
+          <p className="subtitle">Here's what's happening in the lab today.</p>
+        </div>
+        <div className="page-actions">
+          <button className="btn btn-soft" onClick={()=>setView('import')}>↓ Import data</button>
+        </div>
+      </div>
+      <div className="page-body">
+        {stats ? (
+          <>
+            <div className="today-ribbon">
+              <div className="content">
+                <div className="label">MakerBase — live</div>
+                <h2>ChangeLab <em>ops hub.</em></h2>
+                <div className="meta">{stats.activeLabs} active labs · {stats.activeMembers} active members · {stats.imports} imports logged</div>
+              </div>
+              <div className="actions">
+                <button className="btn" onClick={()=>setView('import')}>↓ Import spreadsheet</button>
+              </div>
+            </div>
+            <div className="kpi-row">
+              <div className="kpi kpi-accent">
+                <div className="kpi-label">Dance camp signups</div>
+                <div className="kpi-value"><em>{stats.campers}</em></div>
+                <div className="kpi-delta">{stats.confirmed} confirmed</div>
+              </div>
+              <div className="kpi">
+                <div className="kpi-label">Members</div>
+                <div className="kpi-value">{stats.activeMembers}<span style={{fontSize:18,color:'var(--ink-muted)',marginLeft:4}}>/{stats.members}</span></div>
+                <div className="kpi-delta">active</div>
+              </div>
+              <div className="kpi kpi-accent-orange">
+                <div className="kpi-label">Equipment out</div>
+                <div className="kpi-value"><em>{stats.equipOut}</em></div>
+                <div className="kpi-delta">of {stats.equip} items</div>
+              </div>
+              <div className="kpi">
+                <div className="kpi-label">ChangeLabs</div>
+                <div className="kpi-value">{stats.activeLabs}</div>
+                <div className="kpi-delta">in progress</div>
+              </div>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:16}}>
+              <div className="card" style={{cursor:'pointer'}} onClick={()=>setView('camps')}>
+                <div className="card-sub">Quick access</div>
+                <h3 style={{marginTop:8}}>Dance Camp <em>roster</em></h3>
+                <p style={{marginTop:10,color:'var(--ink-soft)',fontSize:14}}>{stats.campers} signups · click to manage</p>
+              </div>
+              <div className="card" style={{cursor:'pointer'}} onClick={()=>setView('import')}>
+                <div className="card-sub">Data entry</div>
+                <h3 style={{marginTop:8}}>Import a <em>spreadsheet</em></h3>
+                <p style={{marginTop:10,color:'var(--ink-soft)',fontSize:14}}>Drag and drop any .xlsx file</p>
+              </div>
+              <div className="card" style={{cursor:'pointer'}} onClick={()=>setView('equipment')}>
+                <div className="card-sub">Inventory</div>
+                <h3 style={{marginTop:8}}>Equipment <em>status</em></h3>
+                <p style={{marginTop:10,color:'var(--ink-soft)',fontSize:14}}>{stats.equipOut} items checked out</p>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="empty">Loading…</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Import ─────────────────────────────────────────────────────────────────
+function PageImport() {
+  const [file, setFile] = useState(null);
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [drag, setDrag] = useState(false);
+
+  function handleFile(f) {
+    if (!f) return;
+    setFile(f); setResult(null);
+  }
+
+  async function doImport() {
+    if (!file) return;
+    setLoading(true);
+    const form = new FormData();
+    form.append('file', file);
+    try {
+      const r = await api('POST', '/api/import', form, true);
+      setResult({ ok: true, ...r });
+      setFile(null);
+    } catch (e) {
+      setResult({ ok: false, error: e.message });
+    }
+    setLoading(false);
+  }
+
+  return (
+    <div>
+      <div className="page-header">
+        <div>
+          <div className="eyebrow"><span className="dot"></span>Data entry</div>
+          <h1>Import <em>data.</em></h1>
+          <p className="subtitle">Drop any spreadsheet — the system detects the type automatically.</p>
+        </div>
+      </div>
+      <div className="page-body">
+        {result && (
+          <div className={`result-banner ${result.ok?'success':'error'}`}>
+            <span>{result.ok ? '✓' : '✕'}</span>
+            <div>
+              {result.ok
+                ? <><strong>Imported successfully</strong> — detected as <strong>{result.type}</strong>. {result.rows_imported} rows imported, {result.rows_skipped} skipped.{result.errors?.length ? ` ${result.errors.length} row(s) had errors.` : ''}</>
+                : <><strong>Import failed</strong> — {result.error}</>
+              }
+            </div>
+          </div>
+        )}
+
+        {file ? (
+          <div className="card" style={{marginBottom:20}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+              <div>
+                <div className="card-sub">Ready to import</div>
+                <h3 style={{marginTop:6}}>{file.name}</h3>
+                <p style={{marginTop:4,color:'var(--ink-soft)',fontSize:13}}>{(file.size/1024).toFixed(1)} KB</p>
+              </div>
+              <div style={{display:'flex',gap:10}}>
+                <button className="btn btn-soft" onClick={()=>setFile(null)}>Cancel</button>
+                <button className="btn btn-primary" onClick={doImport} disabled={loading}>
+                  {loading ? 'Importing…' : '✓ Confirm import'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div
+            className={`upload-zone ${drag?'drag':''}`}
+            onDragOver={e=>{e.preventDefault();setDrag(true)}}
+            onDragLeave={()=>setDrag(false)}
+            onDrop={e=>{e.preventDefault();setDrag(false);handleFile(e.dataTransfer.files[0])}}
+            onClick={()=>document.getElementById('file-input').click()}
+          >
+            <input id="file-input" type="file" accept=".xlsx,.xls,.csv" onChange={e=>handleFile(e.target.files[0])} />
+            <div className="upload-icon">📊</div>
+            <div className="upload-text">Drop a spreadsheet here</div>
+            <div className="upload-sub" style={{marginTop:6}}>or click to browse · .xlsx · .xls · .csv · max 10 MB</div>
+          </div>
+        )}
+
+        <div className="card" style={{marginTop:24}}>
+          <div className="card-sub" style={{marginBottom:14}}>Supported sheet types — auto-detected from column headers</div>
+          <table className="table">
+            <thead><tr><th>Type</th><th>Required columns</th><th>Destination</th></tr></thead>
+            <tbody>
+              <tr><td className="lead">Dance Camp</td><td>Full Name, Parent/Guardian Name, Emergency Contact Name</td><td>dance_camp_campers</td></tr>
+              <tr><td className="lead">Members</td><td>Name, Major, Joined</td><td>members</td></tr>
+              <tr><td className="lead">Equipment</td><td>Name, Category, Serial, Location</td><td>equipment</td></tr>
+              <tr><td className="lead">Partners</td><td>Name, Kind, Contact, MOU Status</td><td>partners</td></tr>
+              <tr><td className="lead">Certifications</td><td>Name, Valid Days</td><td>certifications</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Dance Camp Roster ───────────────────────────────────────────────────────
+function PageCamps() {
+  const [campers, setCampers] = useState(null);
+  const [filter, setFilter] = useState('all');
+  const [q, setQ] = useState('');
+
+  const load = useCallback(() => {
+    api('GET', '/api/import/roster/dance_camp').then(setCampers).catch(()=>setCampers([]));
+  }, []);
+
+  useEffect(load, [load]);
+
+  async function updateStatus(id, status) {
+    await api('PATCH', `/api/import/dance-camp/${id}`, { status });
+    load();
+  }
+
+  const filtered = (campers || []).filter(c => {
+    if (filter !== 'all' && c.status !== filter) return false;
+    if (q && !c.full_name.toLowerCase().includes(q.toLowerCase())) return false;
+    return true;
+  });
+
+  const counts = (campers||[]).reduce((a,c)=>{a[c.status]=(a[c.status]||0)+1;return a},{});
+
+  function statusPill(s) {
+    const cls = {applied:'pill-plan',confirmed:'pill-open',waitlist:'pill-full',cancelled:'pill-cancel'};
+    return <span className={`pill ${cls[s]||'pill-done'}`}>{s}</span>;
+  }
+
+  return (
+    <div>
+      <div className="page-header">
+        <div>
+          <div className="eyebrow"><span className="dot"></span>Programs</div>
+          <h1>Dance Camp <em>2026.</em></h1>
+          <p className="subtitle">Manage signups, confirm attendance, track medical notes.</p>
+        </div>
+        <div className="page-actions">
+          <button className="btn btn-soft" onClick={load}>↺ Refresh</button>
+        </div>
+      </div>
+      <div className="page-body">
+        {campers === null ? <div className="empty">Loading…</div> : (
+          <>
+            <div className="kpi-row">
+              <div className="kpi kpi-accent"><div className="kpi-label">Total signups</div><div className="kpi-value"><em>{campers.length}</em></div></div>
+              <div className="kpi"><div className="kpi-label">Confirmed</div><div className="kpi-value" style={{color:'var(--success)'}}>{counts.confirmed||0}</div></div>
+              <div className="kpi"><div className="kpi-label">Applied</div><div className="kpi-value">{counts.applied||0}</div></div>
+              <div className="kpi"><div className="kpi-label">Cancelled</div><div className="kpi-value" style={{color:'var(--danger)'}}>{counts.cancelled||0}</div></div>
+            </div>
+
+            {campers.length === 0 ? (
+              <div className="empty">No campers yet — import the signup spreadsheet first.</div>
+            ) : (
+              <>
+                <div className="toolbar">
+                  <div className="search"><input placeholder="Search by name…" value={q} onChange={e=>setQ(e.target.value)} /></div>
+                  {['all','applied','confirmed','waitlist','cancelled'].map(f=>(
+                    <button key={f} className={`chip ${filter===f?'active':''}`} onClick={()=>setFilter(f)}>{f}</button>
+                  ))}
+                </div>
+                <table className="table">
+                  <thead><tr>
+                    <th>Name</th><th>Age</th><th>School</th><th>Shirt</th>
+                    <th>Guardian</th><th>Guardian phone</th>
+                    <th>Emergency contact</th><th>Medical</th><th>Status</th>
+                  </tr></thead>
+                  <tbody>
+                    {filtered.map(c => (
+                      <tr key={c.id}>
+                        <td>
+                          <div className="lead">{c.full_name}</div>
+                          {c.preferred_name && c.preferred_name !== c.full_name && <div className="sub">goes by {c.preferred_name}</div>}
+                        </td>
+                        <td>{c.age_at_camp || '—'}</td>
+                        <td>{c.school || '—'}</td>
+                        <td><span style={{fontFamily:'var(--font-mono)',fontSize:12}}>{c.shirt_size || '—'}</span></td>
+                        <td>
+                          <div className="lead">{c.guardian_name || '—'}</div>
+                        </td>
+                        <td>{c.guardian_phone || '—'}</td>
+                        <td>
+                          <div className="lead">{c.emergency_contact || '—'}</div>
+                          {c.ec_phone && <div className="sub">{c.ec_phone}</div>}
+                        </td>
+                        <td>
+                          {(c.medical_conditions || c.food_restrictions || c.known_medical_issues)
+                            ? <span className="pill pill-full" title={[c.medical_conditions, c.food_restrictions, c.known_medical_issues].filter(Boolean).join(' / ')}>⚠ Has notes</span>
+                            : <span className="pill pill-open">None</span>
+                          }
+                        </td>
+                        <td>
+                          <select className="status-sel" value={c.status} onChange={e=>updateStatus(c.id, e.target.value)}>
+                            <option value="applied">applied</option>
+                            <option value="confirmed">confirmed</option>
+                            <option value="waitlist">waitlist</option>
+                            <option value="cancelled">cancelled</option>
+                          </select>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Members ─────────────────────────────────────────────────────────────────
+function PageMembers() {
+  const [members, setMembers] = useState(null);
+  const [q, setQ] = useState('');
+  const [filter, setFilter] = useState('all');
+
+  useEffect(() => {
+    api('GET', '/api/members').then(setMembers).catch(()=>setMembers([]));
+  }, []);
+
+  const filtered = (members||[]).filter(m => {
+    if (filter !== 'all' && m.status !== filter) return false;
+    if (q && !m.name.toLowerCase().includes(q.toLowerCase()) && !(m.major||'').toLowerCase().includes(q.toLowerCase())) return false;
+    return true;
+  });
+
+  return (
+    <div>
+      <div className="page-header">
+        <div>
+          <div className="eyebrow"><span className="dot"></span>People</div>
+          <h1>Members.</h1>
+          <p className="subtitle">Makerspace member roster.</p>
+        </div>
+      </div>
+      <div className="page-body">
+        {members === null ? <div className="empty">Loading…</div> : members.length === 0 ? (
+          <div className="empty">No members yet — import a member roster spreadsheet.</div>
+        ) : (
+          <>
+            <div className="toolbar">
+              <div className="search"><input placeholder="Search members…" value={q} onChange={e=>setQ(e.target.value)} /></div>
+              {['all','active','inactive','pending'].map(f=>(
+                <button key={f} className={`chip ${filter===f?'active':''}`} onClick={()=>setFilter(f)}>{f}</button>
+              ))}
+            </div>
+            <table className="table">
+              <thead><tr><th>Name</th><th>Major</th><th>Status</th><th>Joined</th><th>Last visit</th></tr></thead>
+              <tbody>
+                {filtered.map(m => (
+                  <tr key={m.id}>
+                    <td>
+                      <div style={{display:'flex',alignItems:'center'}}>
+                        <span className="avatar-sm">{(m.name||'?')[0]}</span>
+                        <span className="lead">{m.name}</span>
+                      </div>
+                      {m.email && <div className="sub">{m.email}</div>}
+                    </td>
+                    <td>{m.major || '—'}</td>
+                    <td><span className={`pill ${m.status==='active'?'pill-open':m.status==='inactive'?'pill-done':'pill-plan'}`}>{m.status}</span></td>
+                    <td style={{fontFamily:'var(--font-mono)',fontSize:12}}>{m.joined ? new Date(m.joined).toLocaleDateString() : '—'}</td>
+                    <td style={{fontFamily:'var(--font-mono)',fontSize:12}}>{m.last_visit ? new Date(m.last_visit).toLocaleDateString() : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Equipment ───────────────────────────────────────────────────────────────
+function PageEquipment() {
+  const [items, setItems] = useState(null);
+  const [filter, setFilter] = useState('all');
+
+  useEffect(() => {
+    api('GET', '/api/equipment').then(setItems).catch(()=>setItems([]));
+  }, []);
+
+  const filtered = (items||[]).filter(e => filter==='all' || e.status===filter);
+
+  function statusPill(s) {
+    const cls = {available:'pill-avail',checked_out:'pill-out',maintenance:'pill-maint',retired:'pill-done'};
+    return <span className={`pill ${cls[s]||'pill-done'}`}>{s.replace('_',' ')}</span>;
+  }
+
+  return (
+    <div>
+      <div className="page-header">
+        <div>
+          <div className="eyebrow"><span className="dot"></span>Gear</div>
+          <h1>Equipment.</h1>
+          <p className="subtitle">Inventory and checkout status.</p>
+        </div>
+      </div>
+      <div className="page-body">
+        {items === null ? <div className="empty">Loading…</div> : items.length === 0 ? (
+          <div className="empty">No equipment yet — import an inventory spreadsheet.</div>
+        ) : (
+          <>
+            <div className="toolbar">
+              {['all','available','checked_out','maintenance'].map(f=>(
+                <button key={f} className={`chip ${filter===f?'active':''}`} onClick={()=>setFilter(f)}>{f.replace('_',' ')}</button>
+              ))}
+            </div>
+            <table className="table">
+              <thead><tr><th>Name</th><th>Category</th><th>Serial</th><th>Location</th><th>Status</th><th>Checked out to</th><th>Due</th></tr></thead>
+              <tbody>
+                {filtered.map(e => (
+                  <tr key={e.id}>
+                    <td className="lead">{e.name}</td>
+                    <td><span style={{fontFamily:'var(--font-mono)',fontSize:11,color:'var(--ink-muted)'}}>{e.category}</span></td>
+                    <td style={{fontFamily:'var(--font-mono)',fontSize:12,color:'var(--ink-muted)'}}>{e.serial || '—'}</td>
+                    <td>{e.location || '—'}</td>
+                    <td>{statusPill(e.status)}</td>
+                    <td>{e.out_to_name || '—'}</td>
+                    <td style={{fontFamily:'var(--font-mono)',fontSize:12}}>{e.due_date ? new Date(e.due_date).toLocaleDateString() : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Partners ─────────────────────────────────────────────────────────────────
+function PagePartners() {
+  const [partners, setPartners] = useState(null);
+
+  useEffect(() => {
+    api('GET', '/api/partners').then(setPartners).catch(()=>setPartners([]));
+  }, []);
+
+  function mouPill(s) {
+    const cls = {signed:'pill-open',mou_pending:'pill-full',informal:'pill-plan',none:'pill-done'};
+    const lbl = {signed:'MOU signed',mou_pending:'MOU pending',informal:'informal',none:'none'};
+    return <span className={`pill ${cls[s]||'pill-done'}`}>{lbl[s]||s}</span>;
+  }
+
+  return (
+    <div>
+      <div className="page-header">
+        <div>
+          <div className="eyebrow"><span className="dot"></span>Network</div>
+          <h1>Partners.</h1>
+          <p className="subtitle">Community partner CRM.</p>
+        </div>
+      </div>
+      <div className="page-body">
+        {partners === null ? <div className="empty">Loading…</div> : partners.length === 0 ? (
+          <div className="empty">No partners yet — import a partners spreadsheet.</div>
+        ) : (
+          <table className="table">
+            <thead><tr><th>Organization</th><th>Kind</th><th>Contact</th><th>Email</th><th>Phone</th><th>MOU</th></tr></thead>
+            <tbody>
+              {partners.map(p => (
+                <tr key={p.id}>
+                  <td className="lead">{p.name}</td>
+                  <td style={{fontFamily:'var(--font-mono)',fontSize:11,color:'var(--ink-muted)'}}>{p.kind}</td>
+                  <td>
+                    <div className="lead">{p.contact || '—'}</div>
+                    {p.role && <div className="sub">{p.role}</div>}
+                  </td>
+                  <td>{p.email || '—'}</td>
+                  <td>{p.phone || '—'}</td>
+                  <td>{mouPill(p.mou_status)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── ChangeLabs ───────────────────────────────────────────────────────────────
+function PageChangeLabs() {
+  const [labs, setLabs] = useState(null);
+  const [filter, setFilter] = useState('all');
+
+  useEffect(() => {
+    api('GET', '/api/changelabs').then(setLabs).catch(()=>setLabs([]));
+  }, []);
+
+  const filtered = (labs||[]).filter(l => filter==='all' || l.status===filter);
+
+  function statusPill(s) {
+    const cls={proposed:'pill-plan',in_progress:'pill-open',completed:'pill-done',cancelled:'pill-cancel'};
+    return <span className={`pill ${cls[s]||'pill-done'}`}>{s.replace('_',' ')}</span>;
+  }
+
+  return (
+    <div>
+      <div className="page-header">
+        <div>
+          <div className="eyebrow"><span className="dot"></span>ChangeLabs</div>
+          <h1>ChangeLabs.</h1>
+          <p className="subtitle">Semester-long community impact projects.</p>
+        </div>
+      </div>
+      <div className="page-body">
+        {labs === null ? <div className="empty">Loading…</div> : labs.length === 0 ? (
+          <div className="empty">No ChangeLabs yet — import a ChangeLabs spreadsheet or create one via the API.</div>
+        ) : (
+          <>
+            <div className="toolbar">
+              {['all','proposed','in_progress','completed'].map(f=>(
+                <button key={f} className={`chip ${filter===f?'active':''}`} onClick={()=>setFilter(f)}>{f.replace('_',' ')}</button>
+              ))}
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:16}}>
+              {filtered.map(cl => (
+                <div key={cl.id} className="card">
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:12}}>
+                    <div>
+                      <div className="card-sub">{cl.code} · {cl.semester}</div>
+                      <h3 style={{marginTop:6}}>{cl.title}</h3>
+                    </div>
+                    {statusPill(cl.status)}
+                  </div>
+                  {cl.brief && <p style={{fontSize:14,color:'var(--ink-soft)',marginBottom:14,lineHeight:1.5}}>{cl.brief}</p>}
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',paddingTop:14,borderTop:'1px solid var(--rule)'}}>
+                    <div>
+                      <div className="card-sub">Enrollment</div>
+                      <div className="cap-bar" style={{marginTop:6}}>
+                        <div className="cap-bar-track">
+                          <div className={`cap-bar-fill ${cl.enrolled>=cl.capacity?'full':''}`} style={{width:(cl.enrolled/cl.capacity*100)+'%'}}></div>
+                        </div>
+                        <span className="cap-bar-text">{cl.enrolled}/{cl.capacity}</span>
+                      </div>
+                    </div>
+                    {cl.partner_name && (
+                      <div style={{textAlign:'right'}}>
+                        <div className="card-sub">Partner</div>
+                        <div style={{fontSize:13,marginTop:4,color:'var(--ink-soft)'}}>{cl.partner_name}</div>
+                      </div>
+                    )}
+                  </div>
+                  {cl.progress > 0 && (
+                    <div style={{marginTop:14}}>
+                      <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}>
+                        <span className="card-sub">Progress</span>
+                        <span style={{fontFamily:'var(--font-mono)',fontSize:12,color:'var(--ink-muted)'}}>{cl.progress}%</span>
+                      </div>
+                      <div className="cap-bar-track" style={{maxWidth:'100%'}}>
+                        <div className="cap-bar-fill" style={{width:cl.progress+'%',background:'var(--purple)'}}></div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Import Logs ──────────────────────────────────────────────────────────────
+function PageLogs() {
+  const [logs, setLogs] = useState(null);
+
+  useEffect(() => {
+    api('GET', '/api/import/logs').then(setLogs).catch(()=>setLogs([]));
+  }, []);
+
+  return (
+    <div>
+      <div className="page-header">
+        <div>
+          <div className="eyebrow"><span className="dot"></span>Audit trail</div>
+          <h1>Import <em>logs.</em></h1>
+          <p className="subtitle">Every spreadsheet import is recorded here.</p>
+        </div>
+        <div className="page-actions">
+          <button className="btn btn-soft" onClick={()=>api('GET','/api/import/logs').then(setLogs)}>↺ Refresh</button>
+        </div>
+      </div>
+      <div className="page-body">
+        {logs === null ? <div className="empty">Loading…</div> : logs.length === 0 ? (
+          <div className="empty">No imports yet — import a spreadsheet first.</div>
+        ) : (
+          <table className="table">
+            <thead><tr><th>Date</th><th>File</th><th>Type</th><th>Found</th><th>Imported</th><th>Skipped</th><th>Errors</th><th>By</th></tr></thead>
+            <tbody>
+              {logs.map(l => (
+                <tr key={l.id}>
+                  <td style={{fontFamily:'var(--font-mono)',fontSize:12}}>{new Date(l.imported_at).toLocaleString()}</td>
+                  <td className="lead">{l.filename}</td>
+                  <td><span className="pill pill-plan">{l.sheet_type}</span></td>
+                  <td style={{fontFamily:'var(--font-mono)',fontSize:12}}>{l.rows_found}</td>
+                  <td style={{fontFamily:'var(--font-mono)',fontSize:12,color:'var(--success)'}}>{l.rows_imported}</td>
+                  <td style={{fontFamily:'var(--font-mono)',fontSize:12}}>{l.rows_skipped}</td>
+                  <td>{l.errors ? <span className="pill pill-full">{JSON.parse(l.errors).length} errors</span> : <span className="pill pill-open">None</span>}</td>
+                  <td>{l.imported_by_name || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── App root ────────────────────────────────────────────────────────────────
+function App() {
+  const [user, setUser] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('mb_user')); } catch { return null; }
+  });
+  const [view, setView] = useState('home');
+
+  function signOut() {
+    localStorage.removeItem('mb_token');
+    localStorage.removeItem('mb_user');
+    setUser(null); setView('home');
+  }
+
+  if (!user) return <SignIn onSignIn={u => { setUser(u); setView('home'); }} />;
+
+  const pages = {
+    home:        <PageToday setView={setView} user={user} />,
+    import:      <PageImport />,
+    camps:       <PageCamps />,
+    members:     <PageMembers />,
+    equipment:   <PageEquipment />,
+    partners:    <PagePartners />,
+    changelabs:  <PageChangeLabs />,
+    logs:        <PageLogs />,
+  };
+
+  return (
+    <div className="app">
+      <Sidebar view={view} setView={setView} user={user} onSignOut={signOut} />
+      <main className="main">{pages[view] || pages.home}</main>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

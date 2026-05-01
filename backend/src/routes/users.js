@@ -1,17 +1,14 @@
-import express from 'express';
-import pool from '../db/index.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
-
-const router = express.Router();
-router.use(requireAuth);
-
-router.get('/', async (req, res) => {
-  try {
-    res.json([]);
-  } catch (err) {
-    console.error('[users/GET /]', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
+import { Router } from 'express';
+import pool from '../db.js';
+import { requireAuth } from '../middleware/auth.js';
+const router = Router();
+router.get('/', requireAuth, async (req, res) => {
+  const { rows } = await pool.query('SELECT id,name,initials,email,role FROM users ORDER BY name');
+  res.json(rows);
 });
-
+router.get('/:id', requireAuth, async (req, res) => {
+  const { rows } = await pool.query('SELECT id,name,initials,email,role FROM users WHERE id=$1', [req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+  res.json(rows[0]);
+});
 export default router;

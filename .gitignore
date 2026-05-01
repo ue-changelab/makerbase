@@ -5,3 +5,5 @@ backups/*.sql
 backups/*.sql.gz
 *.local
 .DS_Store
+backend/write-all.mjs
+backend/.env
