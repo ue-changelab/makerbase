@@ -3,7 +3,7 @@ services:
     name: makerbase-api
     runtime: node
     region: ohio
-    plan: starter
+    plan: free
     branch: main
     rootDir: backend
     buildCommand: npm install && npm run build
@@ -27,5 +27,5 @@ databases:
     databaseName: makerbase
     user: makerbase
     region: ohio
-    plan: starter
+    plan: free
     ipAllowList: []
