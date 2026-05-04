@@ -87,7 +87,7 @@ async function importDanceCamp(rows, userId, client) {
         if (!ecEx.rows[0]) await client.query('INSERT INTO dance_camp_emergency_contacts (camper_id,name,phone,relationship) VALUES ($1,$2,$3,$4)',[camperId,ecName,nullify(row['Emergency Contact Phone']),nullify(row['Emergency Contact Relationship'])]);
       }
       imported++;
-    } catch(err) { errors.push({row:rn,message:err.message}); }
+    } catch(err) { console.error('Row',rn,'error:',err.message); errors.push({row:rn,message:err.message}); }
   }
   return {imported,skipped,errors};
 }
