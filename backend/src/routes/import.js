@@ -83,7 +83,15 @@ async function importDanceCamp(rows, userId, client) {
       }
       const ecName=nullify(row['Emergency Contact Name']);
       if (ecName) {
-        const ecEx=await client.query('SELECT id FROM dance_camp_emergency_contacts WHERE camper_id=$1 AND name=$2',[camperId,ecName]);
+        const ecEx=await client.query('SELECT id FROM danceakerbase
+￼
+Type / to search
+￼
+￼
+￼￼
+Repository navigation
+Code
+_camp_emergency_contacts WHERE camper_id=$1 AND name=$2',[camperId,ecName]);
         if (!ecEx.rows[0]) await client.query('INSERT INTO dance_camp_emergency_contacts (camper_id,name,phone,relationship) VALUES ($1,$2,$3,$4)',[camperId,ecName,nullify(row['Emergency Contact Phone']),nullify(row['Emergency Contact Relationship'])]);
       }
       imported++;
