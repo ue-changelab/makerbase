@@ -17,12 +17,12 @@ function nullify(val) {
 function normalizeDate(val) {
   if (!val) return null;
   const s = String(val).trim();
-  if (/^d{4}-d{2}-d{2}/.test(s)) return s.slice(0,10);
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10);
   const patterns = [
-    [/^(d{2})-(d{2})-(d{4})$/, m => m[3]+'-'+m[1]+'-'+m[2]],
+    [/^(\d{2})-(\d{2})-(\d{4})$/, m => m[3]+'-'+m[1]+'-'+m[2]],
     [/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/, m => m[3]+'-'+m[1].padStart(2,'0')+'-'+m[2].padStart(2,'0')],
-    [/^(d{1,2})s+(w+)s+(d{4})$/, m => { const mo={january:'01',february:'02',march:'03',april:'04',may:'05',june:'06',july:'07',august:'08',september:'09',october:'10',november:'11',december:'12'}; return m[3]+'-'+(mo[m[2].toLowerCase()]||'01')+'-'+m[1].padStart(2,'0'); }],
-    [/^(d{2})-(d{2})-(d{2})$/, m => '20'+m[3]+'-'+m[1]+'-'+m[2]],
+    [/^(\d{1,2})s+(\w+)s+(\d{4})$/, m => { const mo={january:'01',february:'02',march:'03',april:'04',may:'05',june:'06',july:'07',august:'08',september:'09',october:'10',november:'11',december:'12'}; return m[3]+'-'+(mo[m[2].toLowerCase()]||'01')+'-'+m[1].padStart(2,'0'); }],
+    [/^(\d{2})-(\d{2})-(\d{2})$/, m => '20'+m[3]+'-'+m[1]+'-'+m[2]],
   ];
   for (const [re,fn] of patterns) { const m=s.match(re); if(m){try{const d=fn(m);if(d&&!isNaN(new Date(d)))return d;}catch{}} }
   try{const d=new Date(s);if(!isNaN(d))return d.toISOString().slice(0,10);}catch{}
