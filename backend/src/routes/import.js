@@ -73,12 +73,12 @@ async function importDanceCamp(rows, userId, client) {
       }
       const ex=await client.query('SELECT id FROM dance_camp_campers WHERE full_name=$1 AND camp_name=$2',[fullName,'Dance Camp 2026']);
       let camperId;
-      const vals=[fullName,nullify(row['Preferred Name']),normalizeDate(row['Date of Birth']),parseInt(String(row['Age at Camp']||'').replace(/\D.*/,''))||null,nullify(row['School & Grade'])?.split('/')[0]?.trim()??null,nullify(row['School & Grade'])?.split('/')[1]?.trim()??null,nullify(row['Race']),normalizeShirt(row['Shirt Size']),nullify(row['Medical Conditions/Allergies']),nullify(row['Medication Required']),nullify(row['Food Restrictions']),nullify(row['Known Medical Issues']),guardianId];
+      const vals=[fullName,nullify(row['Preferred Name']),normalizeDate(row['Date of Birth']),parseInt(String(row['Age at Camp']||'').replace(/\D.*/,''))||null,nullify(row['School & Grade'])?.split('/')[0]?.trim()??null,nullify(row['School & Grade'])?.split('/')[1]?.trim()??null,nullify(row['Race']),normalizeShirt(row['Shirt Size']),nullify(row['Medical Conditions/Allergies']),nullify(row['Medication Required']),nullify(row['Food Restrictions']),nullify(row['Known Medical Issues']),guardianId,nullify(row['Discount Code']),nullify(row['Transportation Needed'])];
       if (ex.rows[0]) {
-        await client.query('UPDATE dance_camp_campers SET preferred_name=$2,dob=$3,age_at_camp=$4,school=$5,grade=$6,race=$7,shirt_size=$8,medical_conditions=$9,medication_required=$10,food_restrictions=$11,known_medical_issues=$12,guardian_id=$13 WHERE id=$1',[ex.rows[0].id,...vals]);
+        await client.query('UPDATE dance_camp_campers SET preferred_name=$2,dob=$3,age_at_camp=$4,school=$5,grade=$6,race=$7,shirt_size=$8,medical_conditions=$9,medication_required=$10,food_restrictions=$11,known_medical_issues=$12,guardian_id=$13,discount_code=$14,transportation_needed=$15 WHERE id=$1',[ex.rows[0].id,...vals]);
         camperId=ex.rows[0].id;
       } else {
-        const c=await client.query('INSERT INTO dance_camp_campers (full_name,preferred_name,dob,age_at_camp,school,grade,race,shirt_size,medical_conditions,medication_required,food_restrictions,known_medical_issues,guardian_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id',vals);
+        const c=await client.query('INSERT INTO dance_camp_campers (full_name,preferred_name,dob,age_at_camp,school,grade,race,shirt_size,medical_conditions,medication_required,food_restrictions,known_medical_issues,guardian_id,discount_code,transportation_needed) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id',vals);
         camperId=c.rows[0].id;
       }
       const ecName=nullify(row['Emergency Contact Name']);
