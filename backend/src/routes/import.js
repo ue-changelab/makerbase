@@ -73,7 +73,7 @@ async function importDanceCamp(rows, userId, client) {
       }
       const ex=await client.query('SELECT id FROM dance_camp_campers WHERE full_name=$1 AND camp_name=$2',[fullName,'Dance Camp 2026']);
       let camperId;
-      const vals=[fullName,nullify(row['Preferred Name']),normalizeDate(row['Date of Birth']),parseInt(String(row['Age at Camp']||'').replace(/D.*/,''))||null,nullify(row['School & Grade'])?.split('/')[0]?.trim()??null,nullify(row['School & Grade'])?.split('/')[1]?.trim()??null,nullify(row['Race']),normalizeShirt(row['Shirt Size']),nullify(row['Medical Conditions/Allergies']),nullify(row['Medication Required']),nullify(row['Food Restrictions']),nullify(row['Known Medical Issues']),guardianId];
+      const vals=[fullName,nullify(row['Preferred Name']),normalizeDate(row['Date of Birth']),parseInt(String(row['Age at Camp']||'').replace(/\D.*/,''))||null,nullify(row['School & Grade'])?.split('/')[0]?.trim()??null,nullify(row['School & Grade'])?.split('/')[1]?.trim()??null,nullify(row['Race']),normalizeShirt(row['Shirt Size']),nullify(row['Medical Conditions/Allergies']),nullify(row['Medication Required']),nullify(row['Food Restrictions']),nullify(row['Known Medical Issues']),guardianId];
       if (ex.rows[0]) {
         await client.query('UPDATE dance_camp_campers SET preferred_name=$2,dob=$3,age_at_camp=$4,school=$5,grade=$6,race=$7,shirt_size=$8,medical_conditions=$9,medication_required=$10,food_restrictions=$11,known_medical_issues=$12,guardian_id=$13 WHERE id=$1',[ex.rows[0].id,...vals]);
         camperId=ex.rows[0].id;
