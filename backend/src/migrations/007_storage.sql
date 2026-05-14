@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS storage_items (
 CREATE TABLE IF NOT EXISTS storage_checkouts (
   id SERIAL PRIMARY KEY,
   item_id INTEGER NOT NULL REFERENCES storage_items(id) ON DELETE CASCADE,
-  borrowed_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  borrowed_by_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
   borrower_name TEXT NOT NULL,
   event_name TEXT,
   checked_out_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
