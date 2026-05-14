@@ -19,7 +19,6 @@ import GearRequests from './pages/GearRequests'
 import ResetPassword from './pages/ResetPassword'
 import Gallery from './pages/Gallery'
 import UserManagement from './pages/UserManagement'
-import Storage from './pages/Storage'
 
 function AppRoutes() {
     const { defaultLandingPage } = useAuth()
@@ -109,12 +108,6 @@ function AppRoutes() {
                     <Layout><UserManagement /></Layout>
                 </ProtectedRoute>
             } />
-
-	    <Route path="/storage" element={
-    <ProtectedRoute>
-        <Layout><Storage /></Layout>
-    </ProtectedRoute>
-} />
 
             <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
