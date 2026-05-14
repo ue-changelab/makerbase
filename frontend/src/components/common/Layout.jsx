@@ -44,6 +44,7 @@ function Layout({ children }) {
 
     const navigation = [
         { name: 'Dashboard', path: '/' },
+        { name: 'Storage', path: '/storage' },
         { name: 'Equipment', path: '/equipment' },
         { name: 'Checkouts', path: '/checkout-history' },
         ...(isOfficer ? [{ name: 'Bulk Checkout', path: '/bulk-checkout' }] : []),
