@@ -139,6 +139,18 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
 select.status-sel{background:var(--bg);border:1px solid var(--rule);border-radius:var(--r-sm);color:var(--ink);padding:4px 28px 4px 8px;font-size:12px;font-family:var(--font-mono);letter-spacing:.06em;width:auto}
 /* Error state */
 .error-msg{background:#fbe5e1;color:var(--danger);padding:10px 14px;border-radius:var(--r-md);font-size:13px;margin-bottom:16px}
+/* Log error modal */
+.log-modal-backdrop{position:fixed;inset:0;background:rgba(26,14,46,0.6);display:flex;align-items:center;justify-content:center;z-index:1000;padding:24px}
+.log-modal{background:var(--bg);border-radius:var(--r-xl);padding:32px;max-width:620px;width:100%;max-height:80vh;display:flex;flex-direction:column;gap:20px;box-shadow:0 24px 64px rgba(0,0,0,0.3)}
+.log-modal-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.log-modal-close{font-size:22px;line-height:1;color:var(--ink-muted);padding:4px;border-radius:var(--r-sm);transition:color 140ms}
+.log-modal-close:hover{color:var(--ink)}
+.log-modal-errors{overflow-y:auto;display:flex;flex-direction:column;gap:10px}
+.log-error-row{background:var(--bg-tint);border-radius:var(--r-md);padding:12px 16px;border-left:3px solid var(--danger)}
+.log-error-row .row-label{font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-muted);margin-bottom:5px}
+.log-error-row .row-msg{font-size:14px;color:var(--ink);line-height:1.5}
+.log-clickable{cursor:pointer}
+.log-clickable:hover .pill-full{background:var(--orange-deep);color:#fff}
 </style>
 </head>
 <body>
@@ -825,13 +837,63 @@ function PageChangeLabs() {
   );
 }
 
+// ── Import Log Error Modal ───────────────────────────────────────────────────
+function LogErrorModal({ log, onClose }) {
+  const errs = !log.errors ? [] :
+    typeof log.errors === 'string'
+      ? (() => { try { return JSON.parse(log.errors); } catch { return []; } })()
+      : Array.isArray(log.errors) ? log.errors : [];
+
+  return (
+    <div className="log-modal-backdrop" onClick={onClose}>
+      <div className="log-modal" onClick={e => e.stopPropagation()}>
+        <div className="log-modal-header">
+          <div>
+            <div className="eyebrow" style={{marginBottom:8}}><span className="dot"></span>Import errors</div>
+            <h2 style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:500,letterSpacing:'-.015em'}}>{log.filename}</h2>
+            <p style={{fontFamily:'var(--font-mono)',fontSize:12,color:'var(--ink-muted)',marginTop:6,letterSpacing:'.06em'}}>
+              {new Date(log.imported_at).toLocaleString()} &middot; {errs.length} error{errs.length !== 1 ? 's' : ''} &middot; {log.rows_imported} imported of {log.rows_found} found
+            </p>
+          </div>
+          <button className="log-modal-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="log-modal-errors">
+          {errs.length === 0
+            ? <div className="empty">No error details stored.</div>
+            : errs.map((e, i) => (
+                <div key={i} className="log-error-row">
+                  <div className="row-label">Row {e.row}</div>
+                  <div className="row-msg">{e.message}</div>
+                </div>
+              ))
+          }
+        </div>
+        <div style={{display:'flex',justifyContent:'flex-end'}}>
+          <button className="btn btn-soft" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Import Logs ──────────────────────────────────────────────────────────────
 function PageLogs() {
   const [logs, setLogs] = useState(null);
+  const [selectedLog, setSelectedLog] = useState(null);
 
-  useEffect(() => {
+  const loadLogs = useCallback(() => {
     api('GET', '/api/import/logs').then(setLogs).catch(()=>setLogs([]));
   }, []);
+
+  useEffect(loadLogs, [loadLogs]);
+
+  function getErrors(l) {
+    if (!l.errors) return [];
+    if (typeof l.errors === 'string') {
+      try { return JSON.parse(l.errors); } catch { return []; }
+    }
+    return Array.isArray(l.errors) ? l.errors : [];
+  }
 
   return (
     <div>
@@ -839,10 +901,10 @@ function PageLogs() {
         <div>
           <div className="eyebrow"><span className="dot"></span>Audit trail</div>
           <h1>Import <em>logs.</em></h1>
-          <p className="subtitle">Every spreadsheet import is recorded here.</p>
+          <p className="subtitle">Click any row with errors to see exactly what went wrong.</p>
         </div>
         <div className="page-actions">
-          <button className="btn btn-soft" onClick={()=>api('GET','/api/import/logs').then(setLogs)}>↺ Refresh</button>
+          <button className="btn btn-soft" onClick={loadLogs}>↺ Refresh</button>
         </div>
       </div>
       <div className="page-body">
@@ -850,24 +912,53 @@ function PageLogs() {
           <div className="empty">No imports yet — import a spreadsheet first.</div>
         ) : (
           <table className="table">
-            <thead><tr><th>Date</th><th>File</th><th>Type</th><th>Found</th><th>Imported</th><th>Skipped</th><th>Errors</th><th>By</th></tr></thead>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>File</th>
+                <th>Type</th>
+                <th>Found</th>
+                <th>Imported</th>
+                <th>Skipped</th>
+                <th>Errors</th>
+                <th>By</th>
+              </tr>
+            </thead>
             <tbody>
-              {logs.map(l => (
-                <tr key={l.id}>
-                  <td style={{fontFamily:'var(--font-mono)',fontSize:12}}>{new Date(l.imported_at).toLocaleString()}</td>
-                  <td className="lead">{l.filename}</td>
-                  <td><span className="pill pill-plan">{l.sheet_type}</span></td>
-                  <td style={{fontFamily:'var(--font-mono)',fontSize:12}}>{l.rows_found}</td>
-                  <td style={{fontFamily:'var(--font-mono)',fontSize:12,color:'var(--success)'}}>{l.rows_imported}</td>
-                  <td style={{fontFamily:'var(--font-mono)',fontSize:12}}>{l.rows_skipped}</td>
-                  <td>{l.errors ? <span className="pill pill-full">{JSON.parse(l.errors).length} errors</span> : <span className="pill pill-open">None</span>}</td>
-                  <td>{l.imported_by_name || '—'}</td>
-                </tr>
-              ))}
+              {logs.map(l => {
+                const errs = getErrors(l);
+                const hasErrors = errs.length > 0;
+                return (
+                  <tr
+                    key={l.id}
+                    className={hasErrors ? 'log-clickable' : ''}
+                    onClick={() => hasErrors && setSelectedLog(l)}
+                    title={hasErrors ? 'Click to view error details' : ''}
+                  >
+                    <td style={{fontFamily:'var(--font-mono)',fontSize:12}}>{new Date(l.imported_at).toLocaleString()}</td>
+                    <td className="lead">{l.filename}</td>
+                    <td><span className="pill pill-plan">{l.sheet_type}</span></td>
+                    <td style={{fontFamily:'var(--font-mono)',fontSize:12}}>{l.rows_found}</td>
+                    <td style={{fontFamily:'var(--font-mono)',fontSize:12,color:'var(--success)'}}>{l.rows_imported}</td>
+                    <td style={{fontFamily:'var(--font-mono)',fontSize:12}}>{l.rows_skipped}</td>
+                    <td>
+                      {hasErrors
+                        ? <span className="pill pill-full" style={{cursor:'pointer'}}>⚠ {errs.length} error{errs.length!==1?'s':''} — view</span>
+                        : <span className="pill pill-open">None</span>
+                      }
+                    </td>
+                    <td>{l.imported_by_name || '—'}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
       </div>
+
+      {selectedLog && (
+        <LogErrorModal log={selectedLog} onClose={() => setSelectedLog(null)} />
+      )}
     </div>
   );
 }
