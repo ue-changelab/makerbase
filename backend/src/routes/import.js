@@ -2,10 +2,12 @@ import { Router } from 'express';
 import multer from 'multer';
 import * as XLSX from 'xlsx';
 import pool from '../db.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10*1024*1024 } });
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
 
 function nullify(val) {
   if (val===null||val===undefined) return null;
@@ -47,6 +49,17 @@ function detectType(headers) {
   return null;
 }
 
+async function canEditDanceCamp(userId, userRole, campName = 'Dance Camp 2026') {
+  if (userRole === 'admin') return true;
+  const { rows } = await pool.query(
+    'SELECT 1 FROM dance_camp_staff WHERE camp_name=$1 AND user_id=$2',
+    [campName, userId]
+  );
+  return rows.length > 0;
+}
+
+// ── Import handlers ──────────────────────────────────────────────────────────
+
 async function importDanceCamp(rows, userId, client) {
   let imported=0, skipped=0; const errors=[];
   const guardianCache={};
@@ -57,7 +70,6 @@ async function importDanceCamp(rows, userId, client) {
       const fullName = nullify(row['Full Name']);
       if (!fullName) { skipped++; continue; }
 
-      // ── guardian upsert ──────────────────────────────────────────────────
       const guardianName = nullify(row['Parent/Guardian Name']);
       let guardianId = null;
       if (guardianName) {
@@ -87,99 +99,58 @@ async function importDanceCamp(rows, userId, client) {
         }
       }
 
-      // ── build field values (15 fields, matching INSERT columns) ──────────
-      const preferred_name       = nullify(row['Preferred Name']);
-      const dob                  = normalizeDate(row['Date of Birth']);
-      const age_at_camp          = parseInt(String(row['Age at Camp']||'').replace(/\D.*/,'')) || null;
-      const schoolGrade          = nullify(row['School & Grade']);
-      const school               = schoolGrade?.split('/')[0]?.trim() ?? null;
-      const grade                = schoolGrade?.split('/')[1]?.trim() ?? null;
-      const race                 = nullify(row['Race']);
-      const shirt_size           = normalizeShirt(row['Shirt Size']);
-      const medical_conditions   = nullify(row['Medical Conditions/Allergies']);
-      const medication_required  = nullify(row['Medication Required']);
-      const food_restrictions    = nullify(row['Food Restrictions']);
-      const known_medical_issues = nullify(row['Known Medical Issues']);
-      const discount_code        = nullify(row['Discount Code']);
-      const transportation_needed= nullify(row['Transportation Needed']);
+      const preferred_name        = nullify(row['Preferred Name']);
+      const dob                   = normalizeDate(row['Date of Birth']);
+      const age_at_camp           = parseInt(String(row['Age at Camp']||'').replace(/\D.*/,'')) || null;
+      const schoolGrade           = nullify(row['School & Grade']);
+      const school                = schoolGrade?.split('/')[0]?.trim() ?? null;
+      const grade                 = schoolGrade?.split('/')[1]?.trim() ?? null;
+      const race                  = nullify(row['Race']);
+      const shirt_size            = normalizeShirt(row['Shirt Size']);
+      const medical_conditions    = nullify(row['Medical Conditions/Allergies']);
+      const medication_required   = nullify(row['Medication Required']);
+      const food_restrictions     = nullify(row['Food Restrictions']);
+      const known_medical_issues  = nullify(row['Known Medical Issues']);
+      const discount_code         = nullify(row['Discount Code']);
+      const transportation_needed = nullify(row['Transportation Needed']);
 
-      // ── camper upsert ────────────────────────────────────────────────────
       const ex = await client.query(
         'SELECT id FROM dance_camp_campers WHERE full_name=$1 AND camp_name=$2',
         [fullName, 'Dance Camp 2026']
       );
 
       let camperId;
-
       if (ex.rows[0]) {
-        // UPDATE — 14 SET fields + 1 WHERE = 15 params total
         await client.query(
           `UPDATE dance_camp_campers SET
-            preferred_name=$2,
-            dob=$3,
-            age_at_camp=$4,
-            school=$5,
-            grade=$6,
-            race=$7,
-            shirt_size=$8,
-            medical_conditions=$9,
-            medication_required=$10,
-            food_restrictions=$11,
-            known_medical_issues=$12,
-            guardian_id=$13,
-            discount_code=$14,
-            transportation_needed=$15
+            preferred_name=$2, dob=$3, age_at_camp=$4, school=$5, grade=$6, race=$7,
+            shirt_size=$8, medical_conditions=$9, medication_required=$10,
+            food_restrictions=$11, known_medical_issues=$12, guardian_id=$13,
+            discount_code=$14, transportation_needed=$15
           WHERE id=$1`,
           [
-            ex.rows[0].id,       // $1  WHERE
-            preferred_name,      // $2
-            dob,                 // $3
-            age_at_camp,         // $4
-            school,              // $5
-            grade,               // $6
-            race,                // $7
-            shirt_size,          // $8
-            medical_conditions,  // $9
-            medication_required, // $10
-            food_restrictions,   // $11
-            known_medical_issues,// $12
-            guardianId,          // $13
-            discount_code,       // $14
-            transportation_needed// $15
+            ex.rows[0].id, preferred_name, dob, age_at_camp, school, grade, race,
+            shirt_size, medical_conditions, medication_required, food_restrictions,
+            known_medical_issues, guardianId, discount_code, transportation_needed,
           ]
         );
         camperId = ex.rows[0].id;
       } else {
-        // INSERT — 15 columns, 15 params
         const c = await client.query(
           `INSERT INTO dance_camp_campers
             (full_name,preferred_name,dob,age_at_camp,school,grade,race,shirt_size,
              medical_conditions,medication_required,food_restrictions,known_medical_issues,
              guardian_id,discount_code,transportation_needed)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
-           RETURNING id`,
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id`,
           [
-            fullName,            // $1
-            preferred_name,      // $2
-            dob,                 // $3
-            age_at_camp,         // $4
-            school,              // $5
-            grade,               // $6
-            race,                // $7
-            shirt_size,          // $8
-            medical_conditions,  // $9
-            medication_required, // $10
-            food_restrictions,   // $11
-            known_medical_issues,// $12
-            guardianId,          // $13
-            discount_code,       // $14
-            transportation_needed// $15
+            fullName, preferred_name, dob, age_at_camp, school, grade, race,
+            shirt_size, medical_conditions, medication_required, food_restrictions,
+            known_medical_issues, guardianId, discount_code, transportation_needed,
           ]
         );
         camperId = c.rows[0].id;
       }
 
-      // ── emergency contact upsert ─────────────────────────────────────────
       const ecName = nullify(row['Emergency Contact Name']);
       if (ecName) {
         const ecEx = await client.query(
@@ -284,6 +255,8 @@ const importers = {
   certifications: importCerts,
 };
 
+// ── Bulk import ──────────────────────────────────────────────────────────────
+
 router.post('/', requireAuth, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded — use field name "file"' });
   const wb = XLSX.read(req.file.buffer, { type:'buffer', cellDates:false });
@@ -311,6 +284,8 @@ router.post('/', requireAuth, upload.single('file'), async (req, res) => {
   res.json({ type, filename: req.file.originalname, rows_found: rows.length, rows_imported: result.imported, rows_skipped: result.skipped, errors: result.errors });
 });
 
+// ── Import logs ──────────────────────────────────────────────────────────────
+
 router.get('/logs', requireAuth, async (req, res) => {
   const { rows } = await pool.query(
     'SELECT il.*, u.name AS imported_by_name FROM import_logs il LEFT JOIN users u ON u.id=il.imported_by ORDER BY il.imported_at DESC LIMIT 50'
@@ -318,10 +293,21 @@ router.get('/logs', requireAuth, async (req, res) => {
   res.json(rows);
 });
 
+// ── Roster ───────────────────────────────────────────────────────────────────
+
 router.get('/roster/:type', requireAuth, async (req, res) => {
   const queries = {
     dance_camp:
-      'SELECT c.*,g.name AS guardian_name,g.email AS guardian_email,g.cell_phone AS guardian_phone,e.name AS emergency_contact,e.phone AS ec_phone,e.relationship AS ec_relationship FROM dance_camp_campers c LEFT JOIN dance_camp_guardians g ON g.id=c.guardian_id LEFT JOIN dance_camp_emergency_contacts e ON e.camper_id=c.id ORDER BY c.full_name',
+      `SELECT c.*,
+        g.name AS guardian_name, g.email AS guardian_email, g.cell_phone AS guardian_phone,
+        g.relationship AS guardian_relationship, g.address AS guardian_address,
+        g.city_state_zip AS guardian_city_state_zip, g.work_phone AS guardian_work_phone,
+        e.name AS emergency_contact, e.phone AS ec_phone, e.relationship AS ec_relationship,
+        e.id AS ec_id
+       FROM dance_camp_campers c
+       LEFT JOIN dance_camp_guardians g ON g.id=c.guardian_id
+       LEFT JOIN dance_camp_emergency_contacts e ON e.camper_id=c.id
+       ORDER BY c.school NULLS LAST, c.full_name`,
     members:        'SELECT * FROM members ORDER BY name',
     equipment:      'SELECT e.*,u.name AS out_to_name FROM equipment e LEFT JOIN users u ON u.id=e.out_to ORDER BY e.category,e.name',
     partners:       'SELECT * FROM partners ORDER BY name',
@@ -333,12 +319,190 @@ router.get('/roster/:type', requireAuth, async (req, res) => {
   res.json(rows);
 });
 
+// ── Dance camp staff — must come BEFORE /:id routes ─────────────────────────
+
+router.get('/dance-camp/staff', requireAuth, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT u.id, u.name, u.initials, u.email, u.role
+     FROM dance_camp_staff dcs
+     JOIN users u ON u.id=dcs.user_id
+     WHERE dcs.camp_name='Dance Camp 2026'
+     ORDER BY u.name`
+  );
+  res.json(rows);
+});
+
+router.post('/dance-camp/staff', requireAdmin, async (req, res) => {
+  const { user_id } = req.body;
+  if (!user_id) return res.status(400).json({ error: 'user_id required' });
+  await pool.query(
+    `INSERT INTO dance_camp_staff (camp_name, user_id) VALUES ('Dance Camp 2026', $1) ON CONFLICT DO NOTHING`,
+    [user_id]
+  );
+  res.json({ ok: true });
+});
+
+router.delete('/dance-camp/staff/:userId', requireAdmin, async (req, res) => {
+  await pool.query(
+    `DELETE FROM dance_camp_staff WHERE camp_name='Dance Camp 2026' AND user_id=$1`,
+    [req.params.userId]
+  );
+  res.json({ ok: true });
+});
+
+// ── Dance camp status (quick) ────────────────────────────────────────────────
+
 router.patch('/dance-camp/:id', requireAuth, async (req, res) => {
   const { status } = req.body;
-  if (!['applied','confirmed','waitlist','cancelled'].includes(status)) return res.status(400).json({ error: 'Invalid status' });
-  const { rows } = await pool.query('UPDATE dance_camp_campers SET status=$1 WHERE id=$2 RETURNING *', [status, req.params.id]);
+  if (!['applied','confirmed','waitlist','cancelled'].includes(status)) {
+    return res.status(400).json({ error: 'Invalid status' });
+  }
+  const allowed = await canEditDanceCamp(req.user.id, req.user.role);
+  if (!allowed) return res.status(403).json({ error: 'Not authorized to edit this camp' });
+  const { rows } = await pool.query(
+    'UPDATE dance_camp_campers SET status=$1 WHERE id=$2 RETURNING *',
+    [status, req.params.id]
+  );
   if (!rows[0]) return res.status(404).json({ error: 'Not found' });
   res.json(rows[0]);
+});
+
+// ── Dance camp full edit ─────────────────────────────────────────────────────
+
+router.patch('/dance-camp/:id/full', requireAuth, async (req, res) => {
+  const allowed = await canEditDanceCamp(req.user.id, req.user.role);
+  if (!allowed) return res.status(403).json({ error: 'Not authorized to edit this camp' });
+
+  const isAdmin = req.user.role === 'admin';
+  const {
+    // Staff-editable
+    preferred_name, school, grade, shirt_size, transportation_needed, status,
+    medical_conditions, medication_required, food_restrictions, known_medical_issues,
+    // Guardian
+    guardian_name, guardian_relationship, guardian_address, guardian_city_state_zip,
+    guardian_email, guardian_phone, guardian_work_phone,
+    // Emergency contact
+    ec_name, ec_phone, ec_relationship,
+    // Admin-only
+    full_name, dob, age_at_camp, race, discount_code,
+  } = req.body;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    if (isAdmin) {
+      await client.query(
+        `UPDATE dance_camp_campers SET
+          full_name=$2, preferred_name=$3, dob=$4, age_at_camp=$5,
+          school=$6, grade=$7, race=$8, shirt_size=$9,
+          medical_conditions=$10, medication_required=$11, food_restrictions=$12,
+          known_medical_issues=$13, discount_code=$14, transportation_needed=$15, status=$16
+        WHERE id=$1`,
+        [
+          req.params.id,
+          full_name ?? null, preferred_name ?? null, normalizeDate(dob), age_at_camp ?? null,
+          school ?? null, grade ?? null, race ?? null, normalizeShirt(shirt_size),
+          medical_conditions ?? null, medication_required ?? null, food_restrictions ?? null,
+          known_medical_issues ?? null, discount_code ?? null, transportation_needed ?? null, status ?? null,
+        ]
+      );
+    } else {
+      await client.query(
+        `UPDATE dance_camp_campers SET
+          preferred_name=$2, school=$3, grade=$4, shirt_size=$5,
+          medical_conditions=$6, medication_required=$7, food_restrictions=$8,
+          known_medical_issues=$9, transportation_needed=$10, status=$11
+        WHERE id=$1`,
+        [
+          req.params.id,
+          preferred_name ?? null, school ?? null, grade ?? null, normalizeShirt(shirt_size),
+          medical_conditions ?? null, medication_required ?? null, food_restrictions ?? null,
+          known_medical_issues ?? null, transportation_needed ?? null, status ?? null,
+        ]
+      );
+    }
+
+    // Guardian update/create
+    const { rows: camperRows } = await client.query(
+      'SELECT guardian_id FROM dance_camp_campers WHERE id=$1',
+      [req.params.id]
+    );
+    const guardianId = camperRows[0]?.guardian_id;
+
+    if (guardian_name) {
+      if (guardianId) {
+        await client.query(
+          `UPDATE dance_camp_guardians SET
+            name=$2, relationship=$3, address=$4, city_state_zip=$5,
+            email=$6, cell_phone=$7, work_phone=$8
+          WHERE id=$1`,
+          [
+            guardianId, guardian_name, guardian_relationship ?? null,
+            guardian_address ?? null, guardian_city_state_zip ?? null,
+            guardian_email ?? null, guardian_phone ?? null, guardian_work_phone ?? null,
+          ]
+        );
+      } else {
+        const g = await client.query(
+          `INSERT INTO dance_camp_guardians (name,relationship,address,city_state_zip,email,cell_phone,work_phone)
+           VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+          [
+            guardian_name, guardian_relationship ?? null, guardian_address ?? null,
+            guardian_city_state_zip ?? null, guardian_email ?? null,
+            guardian_phone ?? null, guardian_work_phone ?? null,
+          ]
+        );
+        await client.query(
+          'UPDATE dance_camp_campers SET guardian_id=$1 WHERE id=$2',
+          [g.rows[0].id, req.params.id]
+        );
+      }
+    }
+
+    // Emergency contact update/create
+    if (ec_name) {
+      const { rows: ecRows } = await client.query(
+        'SELECT id FROM dance_camp_emergency_contacts WHERE camper_id=$1 LIMIT 1',
+        [req.params.id]
+      );
+      if (ecRows[0]) {
+        await client.query(
+          'UPDATE dance_camp_emergency_contacts SET name=$2, phone=$3, relationship=$4 WHERE id=$1',
+          [ecRows[0].id, ec_name, ec_phone ?? null, ec_relationship ?? null]
+        );
+      } else {
+        await client.query(
+          'INSERT INTO dance_camp_emergency_contacts (camper_id,name,phone,relationship) VALUES ($1,$2,$3,$4)',
+          [req.params.id, ec_name, ec_phone ?? null, ec_relationship ?? null]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+
+    // Return full updated record
+    const { rows } = await pool.query(
+      `SELECT c.*,
+        g.name AS guardian_name, g.email AS guardian_email, g.cell_phone AS guardian_phone,
+        g.relationship AS guardian_relationship, g.address AS guardian_address,
+        g.city_state_zip AS guardian_city_state_zip, g.work_phone AS guardian_work_phone,
+        e.name AS emergency_contact, e.phone AS ec_phone, e.relationship AS ec_relationship,
+        e.id AS ec_id
+       FROM dance_camp_campers c
+       LEFT JOIN dance_camp_guardians g ON g.id=c.guardian_id
+       LEFT JOIN dance_camp_emergency_contacts e ON e.camper_id=c.id
+       WHERE c.id=$1`,
+      [req.params.id]
+    );
+    res.json(rows[0]);
+  } catch(err) {
+    await client.query('ROLLBACK');
+    console.error('Full camper update failed:', err.message);
+    res.status(500).json({ error: 'Update failed: ' + err.message });
+  } finally {
+    client.release();
+  }
 });
 
 export default router;
