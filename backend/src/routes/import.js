@@ -38,9 +38,10 @@ function normalizeShirt(val) {
 }
 
 function detectType(headers) {
-  const h = headers.map(c=>String(c).toLowerCase());
+  const h = headers.map(c=>String(c).toLowerCase().trim());
   const has = (...cols) => cols.every(c=>h.some(x=>x.includes(c)));
   if (has('full name')&&has('parent')&&has('emergency contact')) return 'dance_camp';
+  if (has('first name')&&has('last name')&&has('project')&&has('semester')) return 'changelab_roster';
   if (has('major')&&has('joined')) return 'members';
   if (has('serial')&&has('category')&&has('location')) return 'equipment';
   if (has('code')&&has('semester')&&has('faculty')) return 'changelabs';
@@ -247,12 +248,141 @@ async function importCerts(rows, userId, client) {
   return { imported, skipped, errors };
 }
 
+// ── Normalizers for changelab roster ────────────────────────────────────────
+
+function normalizeSemester(val) {
+  if (!val) return null;
+  let s = String(val).replace(/\xa0/g, ' ').replace(/\n/g, ' ').trim();
+  s = s.replace(/\s+/g, ' ');
+  const yearMatch = s.match(/20\d{2}/);
+  if (!yearMatch) return s;
+  const year = yearMatch[0];
+  const up = s.toUpperCase();
+  if (up.startsWith('FA') || up.startsWith('FALL')) return `FA ${year}`;
+  if (up.startsWith('SP') || up.startsWith('SPRING')) return `SP ${year}`;
+  if (up.startsWith('SU') || up.startsWith('SUMMER')) return `SU ${year}`;
+  return s;
+}
+
+function normalizeClassLevel(val) {
+  if (!val) return null;
+  const map = {
+    'fr': 'Freshman', 'freshman': 'Freshman',
+    'so': 'Sophomore', 'so ': 'Sophomore', 'sophomore': 'Sophomore',
+    'jr': 'Junior', 'junior': 'Junior',
+    'sr': 'Senior', 'senior': 'Senior',
+    'graduate': 'Graduate',
+    'iec': 'IEC',
+  };
+  return map[String(val).trim().toLowerCase()] ?? String(val).trim();
+}
+
+function normalizeProject(val) {
+  if (!val) return null;
+  return String(val).replace(/\xa0/g, ' ').replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function normalizeInstructor(val) {
+  if (!val) return null;
+  const s = String(val).replace(/\xa0/g, ' ').trim();
+  const parts = s.split(/\n/).map(p => p.trim()).filter(Boolean);
+  return parts.join(' / ');
+}
+
+async function importChangelabRoster(rows, userId, client) {
+  let imported=0, skipped=0; const errors=[];
+  const memberCache = {};
+
+  for (const [i, row] of rows.entries()) {
+    const rn = i + 2;
+    try {
+      const firstName  = nullify(row['First Name']);
+      const lastName   = nullify(row['Last Name']);
+      const email      = nullify(row['Email'])?.toLowerCase().trim();
+      const studentId  = nullify(row['Student ID']) ? String(row['Student ID']).trim() : null;
+      const major      = nullify(row['Major(s)']??row['Major']);
+      const citizenship= nullify(row['Citizen of']);
+      const phone      = nullify(row['Phone']);
+      const classLevel = normalizeClassLevel(nullify(row['Class Level']));
+      const semester   = normalizeSemester(nullify(row['Semester ']??row['Semester']));
+      const project    = normalizeProject(nullify(row['Project']));
+      const instructor = normalizeInstructor(nullify(row['Instructor']));
+
+      if (!firstName && !lastName) { skipped++; continue; }
+      if (!semester || !project)   { skipped++; continue; }
+
+      const fullName = [firstName, lastName].filter(Boolean).join(' ');
+
+      // Upsert member — key on email, fall back to student_id, fall back to name
+      let memberId;
+      const cacheKey = email || studentId || fullName;
+
+      if (memberCache[cacheKey]) {
+        memberId = memberCache[cacheKey];
+      } else {
+        // Try email first
+        let existing = null;
+        if (email) {
+          const r = await client.query('SELECT id FROM members WHERE email=$1', [email]);
+          existing = r.rows[0];
+        }
+        // Fall back to student_id
+        if (!existing && studentId) {
+          const r = await client.query('SELECT id FROM members WHERE student_id=$1', [studentId]);
+          existing = r.rows[0];
+        }
+
+        if (existing) {
+          // Update any new info we have
+          await client.query(
+            `UPDATE members SET
+              name=COALESCE(NULLIF($2,''), name),
+              major=COALESCE(NULLIF($3,''), major),
+              student_id=COALESCE(NULLIF($4,''), student_id),
+              citizenship=COALESCE(NULLIF($5,''), citizenship)
+            WHERE id=$1`,
+            [existing.id, fullName, major, studentId, citizenship]
+          );
+          memberId = existing.id;
+        } else {
+          const r = await client.query(
+            `INSERT INTO members (name, email, major, student_id, citizenship, status, joined)
+             VALUES ($1,$2,$3,$4,$5,'inactive', CURRENT_DATE)
+             RETURNING id`,
+            [fullName, email, major, studentId, citizenship]
+          );
+          memberId = r.rows[0].id;
+        }
+        memberCache[cacheKey] = memberId;
+      }
+
+      // Insert roster entry — skip if duplicate (same student, project, semester)
+      await client.query(
+        `INSERT INTO changelab_roster (member_id, project_name, semester, instructor, class_level, phone)
+         VALUES ($1,$2,$3,$4,$5,$6)
+         ON CONFLICT (member_id, project_name, semester) DO UPDATE SET
+           instructor=EXCLUDED.instructor,
+           class_level=EXCLUDED.class_level,
+           phone=EXCLUDED.phone`,
+        [memberId, project, semester, instructor, classLevel, phone]
+      );
+
+      imported++;
+    } catch(err) {
+      console.error('Row', rn, 'error:', err.message);
+      errors.push({ row: rn, message: err.message });
+    }
+  }
+  return { imported, skipped, errors };
+}
+
 const importers = {
-  dance_camp:     importDanceCamp,
-  members:        importMembers,
-  equipment:      importEquipment,
-  partners:       importPartners,
-  certifications: importCerts,
+  dance_camp:        importDanceCamp,
+  members:           importMembers,
+  equipment:         importEquipment,
+  partners:          importPartners,
+  certifications:    importCerts,
+  changelab_roster:  importChangelabRoster,
 };
 
 // ── Bulk import ──────────────────────────────────────────────────────────────
