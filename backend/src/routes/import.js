@@ -333,24 +333,52 @@ async function importChangelabRoster(rows, userId, client) {
         }
 
         if (existing) {
-          // Update any new info we have
+          // Update info but never overwrite student_id with a different value
+          // (avoid unique constraint violation when same student appears multiple times)
           await client.query(
             `UPDATE members SET
               name=COALESCE(NULLIF($2,''), name),
               major=COALESCE(NULLIF($3,''), major),
-              student_id=COALESCE(NULLIF($4,''), student_id),
+              student_id=CASE
+                WHEN student_id IS NULL AND $4::text IS NOT NULL THEN $4::text
+                ELSE student_id
+              END,
               citizenship=COALESCE(NULLIF($5,''), citizenship)
             WHERE id=$1`,
             [existing.id, fullName, major, studentId, citizenship]
           );
           memberId = existing.id;
         } else {
-          const r = await client.query(
-            `INSERT INTO members (name, email, major, student_id, citizenship, status, joined)
-             VALUES ($1,$2,$3,$4,$5,'inactive', CURRENT_DATE)
-             RETURNING id`,
-            [fullName, email, major, studentId, citizenship]
-          );
+          // Split insert path: with email vs without email
+          // (ON CONFLICT on email only works when email is non-null)
+          let r;
+          if (email) {
+            r = await client.query(
+              `INSERT INTO members (name, email, major, student_id, citizenship, status, joined)
+               VALUES ($1,$2,$3,$4,$5,'inactive', CURRENT_DATE)
+               ON CONFLICT (email) DO UPDATE SET
+                 name=COALESCE(NULLIF(EXCLUDED.name,''), members.name),
+                 major=COALESCE(NULLIF(EXCLUDED.major,''), members.major),
+                 student_id=CASE
+                   WHEN members.student_id IS NULL THEN EXCLUDED.student_id
+                   ELSE members.student_id
+                 END,
+                 citizenship=COALESCE(NULLIF(EXCLUDED.citizenship,''), members.citizenship)
+               RETURNING id`,
+              [fullName, email, major, studentId, citizenship]
+            );
+          } else {
+            // No email — insert without student_id unique conflict risk
+            // by only setting student_id when it won't conflict
+            r = await client.query(
+              `INSERT INTO members (name, email, major, student_id, citizenship, status, joined)
+               VALUES ($1, NULL, $2,
+                 CASE WHEN NOT EXISTS (SELECT 1 FROM members WHERE student_id=$3::text) THEN $3::text ELSE NULL END,
+                 $4, 'inactive', CURRENT_DATE)
+               RETURNING id`,
+              [fullName, major, studentId, citizenship]
+            );
+          }
           memberId = r.rows[0].id;
         }
         memberCache[cacheKey] = memberId;
