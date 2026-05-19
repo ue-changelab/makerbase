@@ -860,7 +860,7 @@ function PageLogs() {
                   <td style={{fontFamily:'var(--font-mono)',fontSize:12}}>{l.rows_found}</td>
                   <td style={{fontFamily:'var(--font-mono)',fontSize:12,color:'var(--success)'}}>{l.rows_imported}</td>
                   <td style={{fontFamily:'var(--font-mono)',fontSize:12}}>{l.rows_skipped}</td>
-                  <td>{l.errors ? <span className="pill pill-full">{(typeof l.errors === 'string' ? JSON.parse(l.errors) : l.errors).length} errors</span> : <span className="pill pill-open">None</span>}</td>
+                  <td>{l.errors ? <span className="pill pill-full">{JSON.parse(l.errors).length} errors</span> : <span className="pill pill-open">None</span>}</td>
                   <td>{l.imported_by_name || '—'}</td>
                 </tr>
               ))}
