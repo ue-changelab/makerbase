@@ -485,11 +485,21 @@ function PageCamps() {
     load();
   }
 
-  const filtered = (campers || []).filter(c => {
-    if (filter !== 'all' && c.status !== filter) return false;
-    if (q && !c.full_name.toLowerCase().includes(q.toLowerCase())) return false;
-    return true;
-  });
+  const [selectedCamper, setSelectedCamper] = useState(null);
+
+  const filtered = (campers || [])
+    .filter(c => {
+      if (filter !== 'all' && c.status !== filter) return false;
+      if (q && !c.full_name.toLowerCase().includes(q.toLowerCase())) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      const sa = (a.school || '').toLowerCase();
+      const sb = (b.school || '').toLowerCase();
+      if (sa < sb) return -1;
+      if (sa > sb) return 1;
+      return (a.full_name || '').localeCompare(b.full_name || '');
+    });
 
   const counts = (campers||[]).reduce((a,c)=>{a[c.status]=(a[c.status]||0)+1;return a},{});
 
@@ -538,7 +548,7 @@ function PageCamps() {
                   </tr></thead>
                   <tbody>
                     {filtered.map(c => (
-                      <tr key={c.id}>
+                      <tr key={c.id} onClick={e => { if (e.target.tagName !== 'SELECT') setSelectedCamper(c); }} style={{cursor:'pointer'}}>
                         <td>
                           <div className="lead">{c.full_name}</div>
                           {c.preferred_name && c.preferred_name !== c.full_name && <div className="sub">goes by {c.preferred_name}</div>}
@@ -577,6 +587,93 @@ function PageCamps() {
           </>
         )}
       </div>
+
+      {selectedCamper && (
+        <div className="log-modal-backdrop" onClick={() => setSelectedCamper(null)}>
+          <div className="log-modal" style={{maxWidth:680}} onClick={e => e.stopPropagation()}>
+            <div className="log-modal-header">
+              <div>
+                <div className="eyebrow" style={{marginBottom:8}}><span className="dot"></span>Camper profile</div>
+                <h2 style={{fontFamily:'var(--font-display)',fontSize:26,fontWeight:500,letterSpacing:'-.015em'}}>{selectedCamper.full_name}</h2>
+                {selectedCamper.preferred_name && selectedCamper.preferred_name !== selectedCamper.full_name &&
+                  <p style={{fontFamily:'var(--font-mono)',fontSize:12,color:'var(--ink-muted)',marginTop:4}}>goes by {selectedCamper.preferred_name}</p>
+                }
+              </div>
+              <button className="log-modal-close" onClick={() => setSelectedCamper(null)}>✕</button>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14,overflowY:'auto'}}>
+              <InfoBlock label="School" value={selectedCamper.school} />
+              <InfoBlock label="Grade" value={selectedCamper.grade} />
+              <InfoBlock label="Age at camp" value={selectedCamper.age_at_camp} />
+              <InfoBlock label="Date of birth" value={selectedCamper.dob ? new Date(selectedCamper.dob).toLocaleDateString() : null} />
+              <InfoBlock label="Shirt size" value={selectedCamper.shirt_size} />
+              <InfoBlock label="Race" value={selectedCamper.race} />
+              <InfoBlock label="Status" value={selectedCamper.status} />
+              <InfoBlock label="Discount code" value={selectedCamper.discount_code} />
+              <InfoBlock label="Transportation needed" value={selectedCamper.transportation_needed} />
+              <div style={{gridColumn:'1/-1',borderTop:'1px solid var(--rule)',paddingTop:14,marginTop:4}}>
+                <div className="card-sub" style={{marginBottom:10}}>Parent / Guardian</div>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
+                  <InfoBlock label="Name" value={selectedCamper.guardian_name} />
+                  <InfoBlock label="Cell phone" value={selectedCamper.guardian_phone} />
+                  <InfoBlock label="Email" value={selectedCamper.guardian_email} />
+                </div>
+              </div>
+              <div style={{gridColumn:'1/-1',borderTop:'1px solid var(--rule)',paddingTop:14,marginTop:4}}>
+                <div className="card-sub" style={{marginBottom:10}}>Emergency Contact</div>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
+                  <InfoBlock label="Name" value={selectedCamper.emergency_contact} />
+                  <InfoBlock label="Phone" value={selectedCamper.ec_phone} />
+                  <InfoBlock label="Relationship" value={selectedCamper.ec_relationship} />
+                </div>
+              </div>
+              <div style={{gridColumn:'1/-1',borderTop:'1px solid var(--rule)',paddingTop:14,marginTop:4}}>
+                <div className="card-sub" style={{marginBottom:10}}>Medical &amp; Dietary Notes</div>
+                {!selectedCamper.medical_conditions && !selectedCamper.medication_required && !selectedCamper.food_restrictions && !selectedCamper.known_medical_issues
+                  ? <p style={{fontSize:14,color:'var(--ink-muted)'}}>No notes on file.</p>
+                  : <div style={{display:'flex',flexDirection:'column',gap:10}}>
+                      {selectedCamper.medical_conditions && <NoteBlock label="Medical conditions / allergies" value={selectedCamper.medical_conditions} />}
+                      {selectedCamper.medication_required && <NoteBlock label="Medication required" value={selectedCamper.medication_required} />}
+                      {selectedCamper.food_restrictions && <NoteBlock label="Food restrictions" value={selectedCamper.food_restrictions} />}
+                      {selectedCamper.known_medical_issues && <NoteBlock label="Known medical issues" value={selectedCamper.known_medical_issues} />}
+                    </div>
+                }
+              </div>
+            </div>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',paddingTop:4}}>
+              <select className="status-sel" value={selectedCamper.status} onChange={async e => {
+                const newStatus = e.target.value;
+                await updateStatus(selectedCamper.id, newStatus);
+                setSelectedCamper(c => ({ ...c, status: newStatus }));
+              }}>
+                <option value="applied">applied</option>
+                <option value="confirmed">confirmed</option>
+                <option value="waitlist">waitlist</option>
+                <option value="cancelled">cancelled</option>
+              </select>
+              <button className="btn btn-soft" onClick={() => setSelectedCamper(null)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InfoBlock({ label, value }) {
+  return (
+    <div>
+      <div style={{fontFamily:'var(--font-mono)',fontSize:11,letterSpacing:'.1em',textTransform:'uppercase',color:'var(--ink-muted)',marginBottom:4}}>{label}</div>
+      <div style={{fontSize:14,color:value ? 'var(--ink)' : 'var(--ink-muted)'}}>{value ?? '—'}</div>
+    </div>
+  );
+}
+
+function NoteBlock({ label, value }) {
+  return (
+    <div style={{background:'var(--orange-soft)',borderRadius:'var(--r-md)',padding:'10px 14px',borderLeft:'3px solid var(--orange)'}}>
+      <div style={{fontFamily:'var(--font-mono)',fontSize:11,letterSpacing:'.1em',textTransform:'uppercase',color:'var(--orange-deep)',marginBottom:4}}>{label}</div>
+      <div style={{fontSize:14,color:'var(--ink)',lineHeight:1.5}}>{value}</div>
     </div>
   );
 }
