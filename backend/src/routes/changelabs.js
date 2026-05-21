@@ -105,6 +105,7 @@ router.post('/milestones/:id/complete', requireAdmin, async (req, res) => {
 });
 
 // ── ChangeLab CRUD — /:id routes AFTER static routes ─────────────────────────
+router.get('/:id', requireAuth, async (req, res) => {
   const { rows } = await pool.query(
     `SELECT cl.*, u.name AS faculty_name, p.name AS partner_name
      FROM changelabs cl
