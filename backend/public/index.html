@@ -1013,17 +1013,62 @@ function PagePartners() {
 function PageChangeLabs() {
   const [labs, setLabs] = useState(null);
   const [filter, setFilter] = useState('all');
+  const [q, setQ] = useState('');
+  const [view, setView] = useState('grid'); // 'grid' or 'table'
+  const [selectedLab, setSelectedLab] = useState(null);
+  const [roster, setRoster] = useState(null);
+  const [rosterLoading, setRosterLoading] = useState(false);
 
   useEffect(() => {
-    api('GET', '/api/changelabs').then(setLabs).catch(()=>setLabs([]));
+    api('GET', '/api/changelabs').then(setLabs).catch(() => setLabs([]));
   }, []);
 
-  const filtered = (labs||[]).filter(l => filter==='all' || l.status===filter);
+  async function openLab(lab) {
+    setSelectedLab(lab);
+    setRoster(null);
+    setRosterLoading(true);
+    try {
+      const r = await api('GET', `/api/changelabs/${lab.id}/roster`);
+      setRoster(r);
+    } catch {
+      setRoster([]);
+    } finally {
+      setRosterLoading(false);
+    }
+  }
+
+  const semesters = [...new Set((labs||[]).map(l => l.semester))].sort().reverse();
+
+  const filtered = (labs||[]).filter(l => {
+    if (filter !== 'all' && l.status !== filter) return false;
+    if (q) {
+      const qq = q.toLowerCase();
+      return l.title?.toLowerCase().includes(qq) ||
+             l.semester?.toLowerCase().includes(qq) ||
+             l.brief?.toLowerCase().includes(qq);
+    }
+    return true;
+  }).sort((a, b) => {
+    // Sort by semester desc, then title asc
+    if (a.semester > b.semester) return -1;
+    if (a.semester < b.semester) return 1;
+    return (a.title||'').localeCompare(b.title||'');
+  });
 
   function statusPill(s) {
-    const cls={proposed:'pill-plan',in_progress:'pill-open',completed:'pill-done',cancelled:'pill-cancel'};
-    return <span className={`pill ${cls[s]||'pill-done'}`}>{s.replace('_',' ')}</span>;
+    const cls = {proposed:'pill-plan',in_progress:'pill-open',completed:'pill-done',cancelled:'pill-cancel'};
+    return <span className={`pill ${cls[s]||'pill-done'}`}>{(s||'').replace('_',' ')}</span>;
   }
+
+  // Group filtered labs by semester for grid view
+  const grouped = filtered.reduce((acc, lab) => {
+    const sem = lab.semester || 'Unknown';
+    if (!acc[sem]) acc[sem] = [];
+    acc[sem].push(lab);
+    return acc;
+  }, {});
+
+  const semesterOrder = Object.keys(grouped).sort().reverse();
 
   return (
     <div>
@@ -1031,64 +1076,185 @@ function PageChangeLabs() {
         <div>
           <div className="eyebrow"><span className="dot"></span>ChangeLabs</div>
           <h1>ChangeLabs.</h1>
-          <p className="subtitle">Semester-long community impact projects.</p>
+          <p className="subtitle">Semester-long community impact projects — FA 2012 to present.</p>
+        </div>
+        <div className="page-actions">
+          <button className={`btn ${view==='grid'?'btn-primary':'btn-soft'}`} onClick={()=>setView('grid')}>⊞ Grid</button>
+          <button className={`btn ${view==='table'?'btn-primary':'btn-soft'}`} onClick={()=>setView('table')}>≡ Table</button>
         </div>
       </div>
       <div className="page-body">
-        {labs === null ? <div className="empty">Loading…</div> : labs.length === 0 ? (
-          <div className="empty">No ChangeLabs yet — import a ChangeLabs spreadsheet or create one via the API.</div>
-        ) : (
+        {labs === null ? <div className="empty">Loading…</div> : (
           <>
+            {/* KPIs */}
+            <div className="kpi-row" style={{gridTemplateColumns:'repeat(4,1fr)'}}>
+              <div className="kpi kpi-accent">
+                <div className="kpi-label">Total ChangeLabs</div>
+                <div className="kpi-value"><em>{labs.length}</em></div>
+                <div className="kpi-delta">across {semesters.length} semesters</div>
+              </div>
+              <div className="kpi">
+                <div className="kpi-label">Total students</div>
+                <div className="kpi-value">{labs.reduce((a,l)=>a+(l.enrolled||0),0)}</div>
+                <div className="kpi-delta">enrolled historically</div>
+              </div>
+              <div className="kpi kpi-accent-orange">
+                <div className="kpi-label">In progress</div>
+                <div className="kpi-value">{labs.filter(l=>l.status==='in_progress').length}</div>
+                <div className="kpi-delta">active this semester</div>
+              </div>
+              <div className="kpi">
+                <div className="kpi-label">Completed</div>
+                <div className="kpi-value">{labs.filter(l=>l.status==='completed').length}</div>
+                <div className="kpi-delta">projects delivered</div>
+              </div>
+            </div>
+
+            {/* Toolbar */}
             <div className="toolbar">
-              {['all','proposed','in_progress','completed'].map(f=>(
+              <div className="search"><input placeholder="Search by name, semester, instructor…" value={q} onChange={e=>setQ(e.target.value)} /></div>
+              {['all','in_progress','completed','proposed'].map(f=>(
                 <button key={f} className={`chip ${filter===f?'active':''}`} onClick={()=>setFilter(f)}>{f.replace('_',' ')}</button>
               ))}
             </div>
-            <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:16}}>
-              {filtered.map(cl => (
-                <div key={cl.id} className="card">
-                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:12}}>
-                    <div>
-                      <div className="card-sub">{cl.code} · {cl.semester}</div>
-                      <h3 style={{marginTop:6}}>{cl.title}</h3>
+
+            {filtered.length === 0 ? (
+              <div className="empty">No ChangeLabs match.</div>
+            ) : view === 'grid' ? (
+              /* ── Grid view ── */
+              <div>
+                {semesterOrder.map(sem => (
+                  <div key={sem} style={{marginBottom:32}}>
+                    <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
+                      <h3 style={{fontFamily:'var(--font-mono)',fontSize:13,letterSpacing:'.1em',textTransform:'uppercase',color:'var(--ink-muted)'}}>{sem}</h3>
+                      <div style={{flex:1,height:1,background:'var(--rule)'}}></div>
+                      <span style={{fontFamily:'var(--font-mono)',fontSize:11,color:'var(--ink-muted)'}}>{grouped[sem].length} labs · {grouped[sem].reduce((a,l)=>a+(l.enrolled||0),0)} students</span>
                     </div>
-                    {statusPill(cl.status)}
-                  </div>
-                  {cl.brief && <p style={{fontSize:14,color:'var(--ink-soft)',marginBottom:14,lineHeight:1.5}}>{cl.brief}</p>}
-                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',paddingTop:14,borderTop:'1px solid var(--rule)'}}>
-                    <div>
-                      <div className="card-sub">Enrollment</div>
-                      <div className="cap-bar" style={{marginTop:6}}>
-                        <div className="cap-bar-track">
-                          <div className={`cap-bar-fill ${cl.enrolled>=cl.capacity?'full':''}`} style={{width:(cl.enrolled/cl.capacity*100)+'%'}}></div>
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14}}>
+                      {grouped[sem].map(lab => (
+                        <div key={lab.id} className="card" style={{cursor:'pointer',transition:'box-shadow 180ms'}}
+                          onClick={() => openLab(lab)}
+                          onMouseEnter={e=>e.currentTarget.style.boxShadow='0 4px 20px rgba(76,29,107,0.12)'}
+                          onMouseLeave={e=>e.currentTarget.style.boxShadow=''}>
+                          <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:10}}>
+                            {statusPill(lab.status)}
+                            <span style={{fontFamily:'var(--font-mono)',fontSize:11,color:'var(--ink-muted)'}}>{lab.enrolled||0} students</span>
+                          </div>
+                          <h3 style={{marginBottom:6,fontSize:17}}>{lab.title}</h3>
+                          {lab.brief && lab.brief.startsWith('Instructor:') && (
+                            <div style={{fontSize:12,color:'var(--ink-muted)',fontFamily:'var(--font-mono)',marginBottom:8}}>
+                              {lab.brief.split('·')[0].replace('Instructor: ','').trim()}
+                            </div>
+                          )}
+                          <div style={{display:'flex',alignItems:'center',gap:8,marginTop:10,paddingTop:10,borderTop:'1px solid var(--rule)'}}>
+                            <div className="cap-bar-track" style={{maxWidth:80}}>
+                              <div className="cap-bar-fill" style={{width:Math.min(100,(lab.enrolled/Math.max(lab.capacity,1)*100))+'%'}}></div>
+                            </div>
+                            <span style={{fontFamily:'var(--font-mono)',fontSize:11,color:'var(--ink-muted)'}}>{lab.enrolled||0}/{lab.capacity||0}</span>
+                          </div>
                         </div>
-                        <span className="cap-bar-text">{cl.enrolled}/{cl.capacity}</span>
-                      </div>
+                      ))}
                     </div>
-                    {cl.partner_name && (
-                      <div style={{textAlign:'right'}}>
-                        <div className="card-sub">Partner</div>
-                        <div style={{fontSize:13,marginTop:4,color:'var(--ink-soft)'}}>{cl.partner_name}</div>
-                      </div>
-                    )}
                   </div>
-                  {cl.progress > 0 && (
-                    <div style={{marginTop:14}}>
-                      <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}>
-                        <span className="card-sub">Progress</span>
-                        <span style={{fontFamily:'var(--font-mono)',fontSize:12,color:'var(--ink-muted)'}}>{cl.progress}%</span>
-                      </div>
-                      <div className="cap-bar-track" style={{maxWidth:'100%'}}>
-                        <div className="cap-bar-fill" style={{width:cl.progress+'%',background:'var(--purple)'}}></div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              /* ── Table view ── */
+              <table className="table">
+                <thead><tr>
+                  <th>Name</th><th>Semester</th><th>Instructor</th><th>Students</th><th>Status</th>
+                </tr></thead>
+                <tbody>
+                  {filtered.map(lab => (
+                    <tr key={lab.id} onClick={() => openLab(lab)} style={{cursor:'pointer'}}>
+                      <td className="lead">{lab.title}</td>
+                      <td style={{fontFamily:'var(--font-mono)',fontSize:12}}>{lab.semester}</td>
+                      <td style={{fontSize:13,color:'var(--ink-soft)'}}>
+                        {lab.brief?.startsWith('Instructor:')
+                          ? lab.brief.split('·')[0].replace('Instructor: ','').trim()
+                          : '—'}
+                      </td>
+                      <td style={{fontFamily:'var(--font-mono)',fontSize:12}}>{lab.enrolled||0}</td>
+                      <td>{statusPill(lab.status)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </>
         )}
       </div>
+
+      {/* ── ChangeLab detail modal ── */}
+      {selectedLab && (
+        <div className="log-modal-backdrop" onClick={() => setSelectedLab(null)}>
+          <div className="log-modal" style={{maxWidth:740}} onClick={e => e.stopPropagation()}>
+            <div className="log-modal-header">
+              <div style={{flex:1,minWidth:0}}>
+                <div className="eyebrow" style={{marginBottom:8}}>
+                  <span className="dot"></span>{selectedLab.semester}
+                </div>
+                <h2 style={{fontFamily:'var(--font-display)',fontSize:26,fontWeight:500,letterSpacing:'-.015em'}}>{selectedLab.title}</h2>
+                {selectedLab.brief?.startsWith('Instructor:') && (
+                  <p style={{fontFamily:'var(--font-mono)',fontSize:12,color:'var(--ink-muted)',marginTop:6}}>
+                    {selectedLab.brief.split('·')[0].replace('Instructor: ','').trim()}
+                  </p>
+                )}
+              </div>
+              <div style={{display:'flex',gap:8,alignItems:'flex-start',flexShrink:0}}>
+                {statusPill(selectedLab.status)}
+                <button className="log-modal-close" onClick={() => setSelectedLab(null)}>✕</button>
+              </div>
+            </div>
+
+            {/* Stats row */}
+            <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,padding:'16px 0',borderTop:'1px solid var(--rule)',borderBottom:'1px solid var(--rule)'}}>
+              <div style={{textAlign:'center'}}>
+                <div style={{fontFamily:'var(--font-display)',fontSize:32,fontWeight:500,color:'var(--purple)'}}>{selectedLab.enrolled||0}</div>
+                <div style={{fontFamily:'var(--font-mono)',fontSize:11,letterSpacing:'.1em',textTransform:'uppercase',color:'var(--ink-muted)',marginTop:4}}>Students</div>
+              </div>
+              <div style={{textAlign:'center'}}>
+                <div style={{fontFamily:'var(--font-display)',fontSize:32,fontWeight:500}}>{selectedLab.capacity||0}</div>
+                <div style={{fontFamily:'var(--font-mono)',fontSize:11,letterSpacing:'.1em',textTransform:'uppercase',color:'var(--ink-muted)',marginTop:4}}>Capacity</div>
+              </div>
+              <div style={{textAlign:'center'}}>
+                <div style={{fontFamily:'var(--font-display)',fontSize:32,fontWeight:500,color:'var(--success)'}}>{selectedLab.progress||0}%</div>
+                <div style={{fontFamily:'var(--font-mono)',fontSize:11,letterSpacing:'.1em',textTransform:'uppercase',color:'var(--ink-muted)',marginTop:4}}>Progress</div>
+              </div>
+            </div>
+
+            {/* Roster */}
+            <div style={{overflowY:'auto',maxHeight:'45vh'}}>
+              <div className="card-sub" style={{marginBottom:10,marginTop:4}}>Enrolled students</div>
+              {rosterLoading ? (
+                <div style={{padding:'20px 0',color:'var(--ink-muted)',fontSize:14}}>Loading roster…</div>
+              ) : !roster || roster.length === 0 ? (
+                <div style={{padding:'20px 0',color:'var(--ink-muted)',fontSize:14}}>No roster data on file.</div>
+              ) : (
+                <table className="table" style={{fontSize:13}}>
+                  <thead><tr>
+                    <th>Name</th><th>Major</th><th>Class</th><th>Email</th>
+                  </tr></thead>
+                  <tbody>
+                    {roster.map(s => (
+                      <tr key={s.id}>
+                        <td className="lead">{s.name}</td>
+                        <td style={{color:'var(--ink-soft)'}}>{s.major||'—'}</td>
+                        <td style={{fontFamily:'var(--font-mono)',fontSize:11}}>{s.class_level||'—'}</td>
+                        <td style={{fontFamily:'var(--font-mono)',fontSize:11}}>{s.email||'—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            <div style={{display:'flex',justifyContent:'flex-end',paddingTop:16,borderTop:'1px solid var(--rule)'}}>
+              <button className="btn btn-soft" onClick={() => setSelectedLab(null)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
