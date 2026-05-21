@@ -289,7 +289,9 @@ function normalizeInstructor(val) {
   return parts.join(' / ');
 }
 
-async function importChangelabRoster(rows, userId, client) {
+async function importChangelabRoster(rows, userId, _client) {
+  // Uses pool directly — each row is independent, no wrapping transaction
+  const client = pool;
   let imported=0, skipped=0; const errors=[];
   const memberCache = {};
 
@@ -351,34 +353,23 @@ async function importChangelabRoster(rows, userId, client) {
         } else {
           // Split insert path: with email vs without email
           // (ON CONFLICT on email only works when email is non-null)
-          let r;
-          if (email) {
-            r = await client.query(
-              `INSERT INTO members (name, email, major, student_id, citizenship, status, joined)
-               VALUES ($1,$2,$3,$4,$5,'inactive', CURRENT_DATE)
-               ON CONFLICT (email) DO UPDATE SET
-                 name=COALESCE(NULLIF(EXCLUDED.name,''), members.name),
-                 major=COALESCE(NULLIF(EXCLUDED.major,''), members.major),
-                 student_id=CASE
-                   WHEN members.student_id IS NULL THEN EXCLUDED.student_id
-                   ELSE members.student_id
-                 END,
-                 citizenship=COALESCE(NULLIF(EXCLUDED.citizenship,''), members.citizenship)
-               RETURNING id`,
-              [fullName, email, major, studentId, citizenship]
+          // Safe insert: check for conflicts manually rather than relying on
+          // ON CONFLICT (email) which requires a unique constraint on email
+          // and ON CONFLICT (student_id) which breaks on NULL student_ids
+          let safeStudentId = null;
+          if (studentId) {
+            const sidCheck = await client.query(
+              'SELECT id FROM members WHERE student_id=$1', [studentId]
             );
-          } else {
-            // No email — insert without student_id unique conflict risk
-            // by only setting student_id when it won't conflict
-            r = await client.query(
-              `INSERT INTO members (name, email, major, student_id, citizenship, status, joined)
-               VALUES ($1, NULL, $2,
-                 CASE WHEN NOT EXISTS (SELECT 1 FROM members WHERE student_id=$3::text) THEN $3::text ELSE NULL END,
-                 $4, 'inactive', CURRENT_DATE)
-               RETURNING id`,
-              [fullName, major, studentId, citizenship]
-            );
+            if (!sidCheck.rows[0]) safeStudentId = studentId;
           }
+
+          const r = await client.query(
+            `INSERT INTO members (name, email, major, student_id, citizenship, status, joined)
+             VALUES ($1,$2,$3,$4,$5,'inactive', CURRENT_DATE)
+             RETURNING id`,
+            [fullName, email ?? null, major ?? null, safeStudentId, citizenship ?? null]
+          );
           memberId = r.rows[0].id;
         }
         memberCache[cacheKey] = memberId;
@@ -423,14 +414,20 @@ router.post('/', requireAuth, upload.single('file'), async (req, res) => {
   if (!rows.length) return res.status(400).json({ error: 'Sheet is empty' });
   const type = detectType(Object.keys(rows[0]));
   if (!type||!importers[type]) return res.status(400).json({ error: 'Could not detect sheet type', headers: Object.keys(rows[0]) });
+  // changelab_roster imports row-by-row without a wrapping transaction
+  // so one bad row doesn't roll back the entire file
   const client = await pool.connect();
   let result;
   try {
-    await client.query('BEGIN');
-    result = await importers[type](rows, req.user.id, client);
-    await client.query('COMMIT');
+    if (type === 'changelab_roster') {
+      result = await importers[type](rows, req.user.id, client);
+    } else {
+      await client.query('BEGIN');
+      result = await importers[type](rows, req.user.id, client);
+      await client.query('COMMIT');
+    }
   } catch(err) {
-    await client.query('ROLLBACK');
+    try { await client.query('ROLLBACK'); } catch (_) {}
     return res.status(500).json({ error: 'Import failed: ' + err.message });
   } finally {
     client.release();
