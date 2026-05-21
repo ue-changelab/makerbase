@@ -1010,57 +1010,186 @@ function PagePartners() {
 }
 
 // ── ChangeLabs ───────────────────────────────────────────────────────────────
+
+// Helper: compute semester progress from today's date
+function useSemesterProgress(semCode, semesters) {
+  if (!semCode || !semesters) return null;
+  const sem = semesters.find(s => s.code === semCode);
+  if (!sem) return null;
+
+  const today = new Date();
+  const start = new Date(sem.start_date);
+  const end   = new Date(sem.end_date);
+  const finals = sem.finals_start ? new Date(sem.finals_start) : null;
+
+  if (today < start) return { phase: 'pre', pct: 0, label: 'Not started', sem };
+  if (today > end)   return { phase: 'done', pct: 100, label: 'Completed', sem };
+
+  const total = end - start;
+  const elapsed = today - start;
+  const pct = Math.round((elapsed / total) * 100);
+
+  // Calculate week number (excluding breaks)
+  const msPerWeek = 7 * 24 * 3600 * 1000;
+  const totalWeeks = Math.round(total / msPerWeek);
+  const elapsedWeeks = Math.round(elapsed / msPerWeek);
+
+  let phase = 'active';
+  let label = `Week ${elapsedWeeks} of ${totalWeeks}`;
+
+  if (finals && today >= finals) {
+    phase = 'finals';
+    label = 'Finals week';
+  } else if (sem.spring_break_start && today >= new Date(sem.spring_break_start) && today <= new Date(sem.spring_break_end)) {
+    phase = 'break';
+    label = 'Spring break';
+  } else if (sem.fall_break_start && today >= new Date(sem.fall_break_start) && today <= new Date(sem.fall_break_end)) {
+    phase = 'break';
+    label = 'Fall break';
+  } else if (sem.midterm_date) {
+    const midterm = new Date(sem.midterm_date);
+    if (today < midterm) label = `Week ${elapsedWeeks} of ${totalWeeks} · pre-midterm`;
+    else label = `Week ${elapsedWeeks} of ${totalWeeks} · post-midterm`;
+  }
+
+  return { phase, pct, label, sem, elapsedWeeks, totalWeeks };
+}
+
+function SemesterProgressBar({ progress }) {
+  if (!progress) return null;
+  const colors = {
+    pre: 'var(--ink-muted)',
+    active: 'var(--purple)',
+    break: 'var(--gold)',
+    finals: 'var(--orange)',
+    done: 'var(--success)',
+  };
+  const color = colors[progress.phase] || 'var(--purple)';
+  return (
+    <div style={{marginTop:8}}>
+      <div style={{display:'flex',justifyContent:'space-between',marginBottom:5}}>
+        <span style={{fontFamily:'var(--font-mono)',fontSize:11,letterSpacing:'.06em',color:'var(--ink-muted)',textTransform:'uppercase'}}>{progress.label}</span>
+        <span style={{fontFamily:'var(--font-mono)',fontSize:11,color:'var(--ink-muted)'}}>{progress.pct}%</span>
+      </div>
+      <div style={{height:5,background:'var(--bg-tint)',borderRadius:99,overflow:'hidden'}}>
+        <div style={{height:'100%',width:progress.pct+'%',background:color,borderRadius:99,transition:'width 400ms'}} />
+      </div>
+    </div>
+  );
+}
+
 function PageChangeLabs() {
   const [labs, setLabs] = useState(null);
+  const [semesters, setSemesters] = useState(null);
   const [filter, setFilter] = useState('all');
   const [q, setQ] = useState('');
-  const [view, setView] = useState('grid'); // 'grid' or 'table'
+  const [view, setView] = useState('grid');
   const [selectedLab, setSelectedLab] = useState(null);
   const [roster, setRoster] = useState(null);
   const [rosterLoading, setRosterLoading] = useState(false);
+  const [milestones, setMilestones] = useState(null);
+  const [milestonesLoading, setMilestonesLoading] = useState(false);
+  const [addingMilestone, setAddingMilestone] = useState(false);
+  const [newMilestone, setNewMilestone] = useState({ title: '', due_date: '' });
+  const [saving, setSaving] = useState(false);
+
+  const currentUser = React.useMemo(() => {
+    try { return JSON.parse(localStorage.getItem('mb_user')); } catch { return null; }
+  }, []);
+  const isAdmin = currentUser?.role === 'admin';
 
   useEffect(() => {
     api('GET', '/api/changelabs').then(setLabs).catch(() => setLabs([]));
+    api('GET', '/api/changelabs/semesters/all').then(setSemesters).catch(() => setSemesters([]));
   }, []);
 
   async function openLab(lab) {
     setSelectedLab(lab);
-    setRoster(null);
-    setRosterLoading(true);
+    setRoster(null); setMilestones(null);
+    setRosterLoading(true); setMilestonesLoading(true);
+
     try {
       const r = await api('GET', `/api/changelabs/${lab.id}/roster`);
       setRoster(r);
-    } catch {
-      setRoster([]);
-    } finally {
-      setRosterLoading(false);
-    }
+    } catch { setRoster([]); }
+    finally { setRosterLoading(false); }
+
+    try {
+      const semCode = encodeURIComponent(lab.semester);
+      const m = await api('GET', `/api/changelabs/semesters/${semCode}/milestones?lab_id=${lab.id}`);
+      setMilestones(m);
+    } catch { setMilestones([]); }
+    finally { setMilestonesLoading(false); }
   }
 
-  const semesters = [...new Set((labs||[]).map(l => l.semester))].sort().reverse();
+  async function toggleMilestone(milestoneId) {
+    if (!isAdmin || !selectedLab) return;
+    try {
+      const r = await api('POST', `/api/changelabs/milestones/${milestoneId}/complete`, { changelab_id: selectedLab.id });
+      // Refresh milestones
+      const semCode = encodeURIComponent(selectedLab.semester);
+      const m = await api('GET', `/api/changelabs/semesters/${semCode}/milestones?lab_id=${selectedLab.id}`);
+      setMilestones(m);
+      // Update progress on lab
+      const done = m.filter(x => x.completed).length;
+      const pct = m.length ? Math.round((done / m.length) * 100) : 0;
+      await api('PATCH', `/api/changelabs/${selectedLab.id}`, { progress: pct });
+      setSelectedLab(l => ({ ...l, progress: pct }));
+      setLabs(ls => ls.map(l => l.id === selectedLab.id ? { ...l, progress: pct } : l));
+    } catch(e) { alert('Failed: ' + e.message); }
+  }
 
-  const filtered = (labs||[]).filter(l => {
-    if (filter !== 'all' && l.status !== filter) return false;
-    if (q) {
-      const qq = q.toLowerCase();
-      return l.title?.toLowerCase().includes(qq) ||
-             l.semester?.toLowerCase().includes(qq) ||
-             l.brief?.toLowerCase().includes(qq);
-    }
-    return true;
-  }).sort((a, b) => {
-    // Sort by semester desc, then title asc
-    if (a.semester > b.semester) return -1;
-    if (a.semester < b.semester) return 1;
-    return (a.title||'').localeCompare(b.title||'');
-  });
+  async function addMilestone() {
+    if (!newMilestone.title || !newMilestone.due_date) return;
+    setSaving(true);
+    try {
+      const semCode = encodeURIComponent(selectedLab.semester);
+      await api('POST', `/api/changelabs/semesters/${semCode}/milestones`, {
+        title: newMilestone.title,
+        due_date: newMilestone.due_date,
+        sort_order: (milestones?.length || 0) + 1,
+      });
+      const m = await api('GET', `/api/changelabs/semesters/${semCode}/milestones?lab_id=${selectedLab.id}`);
+      setMilestones(m);
+      setNewMilestone({ title: '', due_date: '' });
+      setAddingMilestone(false);
+    } catch(e) { alert('Failed: ' + e.message); }
+    finally { setSaving(false); }
+  }
+
+  async function deleteMilestone(id) {
+    if (!confirm('Delete this milestone?')) return;
+    try {
+      await api('DELETE', `/api/changelabs/milestones/${id}`);
+      setMilestones(m => m.filter(x => x.id !== id));
+    } catch(e) { alert('Failed: ' + e.message); }
+  }
+
+  const semList = semesters || [];
+  const semesterOrder2 = [...new Set((labs||[]).map(l => l.semester))].sort().reverse();
+
+  const filtered = (labs||[])
+    .filter(l => {
+      if (filter !== 'all' && l.status !== filter) return false;
+      if (q) {
+        const qq = q.toLowerCase();
+        return l.title?.toLowerCase().includes(qq) ||
+               l.semester?.toLowerCase().includes(qq) ||
+               l.brief?.toLowerCase().includes(qq);
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      if (a.semester > b.semester) return -1;
+      if (a.semester < b.semester) return 1;
+      return (a.title||'').localeCompare(b.title||'');
+    });
 
   function statusPill(s) {
     const cls = {proposed:'pill-plan',in_progress:'pill-open',completed:'pill-done',cancelled:'pill-cancel'};
     return <span className={`pill ${cls[s]||'pill-done'}`}>{(s||'').replace('_',' ')}</span>;
   }
 
-  // Group filtered labs by semester for grid view
   const grouped = filtered.reduce((acc, lab) => {
     const sem = lab.semester || 'Unknown';
     if (!acc[sem]) acc[sem] = [];
@@ -1069,6 +1198,10 @@ function PageChangeLabs() {
   }, {});
 
   const semesterOrder = Object.keys(grouped).sort().reverse();
+
+  // Current semester ribbon
+  const currentSemCode = 'SP 2026';
+  const currentSemProgress = useSemesterProgress(currentSemCode, semList);
 
   return (
     <div>
@@ -1087,11 +1220,11 @@ function PageChangeLabs() {
         {labs === null ? <div className="empty">Loading…</div> : (
           <>
             {/* KPIs */}
-            <div className="kpi-row" style={{gridTemplateColumns:'repeat(4,1fr)'}}>
+            <div className="kpi-row">
               <div className="kpi kpi-accent">
                 <div className="kpi-label">Total ChangeLabs</div>
                 <div className="kpi-value"><em>{labs.length}</em></div>
-                <div className="kpi-delta">across {semesters.length} semesters</div>
+                <div className="kpi-delta">across {[...new Set(labs.map(l=>l.semester))].length} semesters</div>
               </div>
               <div className="kpi">
                 <div className="kpi-label">Total students</div>
@@ -1110,6 +1243,35 @@ function PageChangeLabs() {
               </div>
             </div>
 
+            {/* Current semester ribbon */}
+            {currentSemProgress && (
+              <div className="today-ribbon" style={{marginBottom:24}}>
+                <div className="content">
+                  <div className="label">Current semester</div>
+                  <h2>{currentSemCode} <em>in progress.</em></h2>
+                  <div className="meta">{currentSemProgress.label}</div>
+                  <div style={{marginTop:12,maxWidth:320}}>
+                    <div style={{height:6,background:'rgba(250,246,239,.2)',borderRadius:99,overflow:'hidden'}}>
+                      <div style={{height:'100%',width:currentSemProgress.pct+'%',background:'var(--orange)',borderRadius:99,transition:'width 600ms'}} />
+                    </div>
+                    <div style={{display:'flex',justifyContent:'space-between',marginTop:6,fontFamily:'var(--font-mono)',fontSize:11,color:'rgba(250,246,239,.7)'}}>
+                      <span>{currentSemProgress.sem.start_date}</span>
+                      <span>{currentSemProgress.pct}% complete</span>
+                      <span>{currentSemProgress.sem.end_date}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="actions" style={{zIndex:1,position:'relative'}}>
+                  <div style={{background:'rgba(250,246,239,.12)',borderRadius:'var(--r-lg)',padding:'14px 20px',minWidth:180}}>
+                    <div style={{fontFamily:'var(--font-mono)',fontSize:11,letterSpacing:'.1em',textTransform:'uppercase',color:'rgba(250,246,239,.6)',marginBottom:8}}>Key dates</div>
+                    {currentSemProgress.sem.spring_break_start && <div style={{fontSize:12,color:'rgba(250,246,239,.85)',marginBottom:4}}>🌴 Spring break: {currentSemProgress.sem.spring_break_start}</div>}
+                    {currentSemProgress.sem.finals_start && <div style={{fontSize:12,color:'rgba(250,246,239,.85)',marginBottom:4}}>📝 Finals: {currentSemProgress.sem.finals_start}</div>}
+                    <div style={{fontSize:12,color:'rgba(250,246,239,.85)'}}>🏁 Last day: {currentSemProgress.sem.end_date}</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Toolbar */}
             <div className="toolbar">
               <div className="search"><input placeholder="Search by name, semester, instructor…" value={q} onChange={e=>setQ(e.target.value)} /></div>
@@ -1121,63 +1283,92 @@ function PageChangeLabs() {
             {filtered.length === 0 ? (
               <div className="empty">No ChangeLabs match.</div>
             ) : view === 'grid' ? (
-              /* ── Grid view ── */
               <div>
-                {semesterOrder.map(sem => (
-                  <div key={sem} style={{marginBottom:32}}>
-                    <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
-                      <h3 style={{fontFamily:'var(--font-mono)',fontSize:13,letterSpacing:'.1em',textTransform:'uppercase',color:'var(--ink-muted)'}}>{sem}</h3>
-                      <div style={{flex:1,height:1,background:'var(--rule)'}}></div>
-                      <span style={{fontFamily:'var(--font-mono)',fontSize:11,color:'var(--ink-muted)'}}>{grouped[sem].length} labs · {grouped[sem].reduce((a,l)=>a+(l.enrolled||0),0)} students</span>
-                    </div>
-                    <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14}}>
-                      {grouped[sem].map(lab => (
-                        <div key={lab.id} className="card" style={{cursor:'pointer',transition:'box-shadow 180ms'}}
-                          onClick={() => openLab(lab)}
-                          onMouseEnter={e=>e.currentTarget.style.boxShadow='0 4px 20px rgba(76,29,107,0.12)'}
-                          onMouseLeave={e=>e.currentTarget.style.boxShadow=''}>
-                          <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:10}}>
-                            {statusPill(lab.status)}
-                            <span style={{fontFamily:'var(--font-mono)',fontSize:11,color:'var(--ink-muted)'}}>{lab.enrolled||0} students</span>
-                          </div>
-                          <h3 style={{marginBottom:6,fontSize:17}}>{lab.title}</h3>
-                          {lab.brief && lab.brief.startsWith('Instructor:') && (
-                            <div style={{fontSize:12,color:'var(--ink-muted)',fontFamily:'var(--font-mono)',marginBottom:8}}>
-                              {lab.brief.split('·')[0].replace('Instructor: ','').trim()}
+                {semesterOrder.map(sem => {
+                  const semProgress = useSemesterProgress(sem, semList);
+                  return (
+                    <div key={sem} style={{marginBottom:32}}>
+                      <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
+                        <h3 style={{fontFamily:'var(--font-mono)',fontSize:13,letterSpacing:'.1em',textTransform:'uppercase',color:'var(--ink-muted)'}}>{sem}</h3>
+                        {semProgress && semProgress.phase === 'active' && (
+                          <span style={{fontFamily:'var(--font-mono)',fontSize:11,color:'var(--purple)',background:'var(--purple-soft)',padding:'2px 8px',borderRadius:999}}>{semProgress.label}</span>
+                        )}
+                        <div style={{flex:1,height:1,background:'var(--rule)'}}></div>
+                        <span style={{fontFamily:'var(--font-mono)',fontSize:11,color:'var(--ink-muted)'}}>{grouped[sem].length} labs · {grouped[sem].reduce((a,l)=>a+(l.enrolled||0),0)} students</span>
+                      </div>
+                      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14}}>
+                        {grouped[sem].map(lab => (
+                          <div key={lab.id} className="card" style={{cursor:'pointer',transition:'box-shadow 180ms'}}
+                            onClick={() => openLab(lab)}
+                            onMouseEnter={e=>e.currentTarget.style.boxShadow='0 4px 20px rgba(76,29,107,0.12)'}
+                            onMouseLeave={e=>e.currentTarget.style.boxShadow=''}>
+                            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:10}}>
+                              {statusPill(lab.status)}
+                              <span style={{fontFamily:'var(--font-mono)',fontSize:11,color:'var(--ink-muted)'}}>{lab.enrolled||0} students</span>
                             </div>
-                          )}
-                          <div style={{display:'flex',alignItems:'center',gap:8,marginTop:10,paddingTop:10,borderTop:'1px solid var(--rule)'}}>
-                            <div className="cap-bar-track" style={{maxWidth:80}}>
-                              <div className="cap-bar-fill" style={{width:Math.min(100,(lab.enrolled/Math.max(lab.capacity,1)*100))+'%'}}></div>
+                            <h3 style={{marginBottom:6,fontSize:17}}>{lab.title}</h3>
+                            {lab.brief?.startsWith('Instructor:') && (
+                              <div style={{fontSize:12,color:'var(--ink-muted)',fontFamily:'var(--font-mono)',marginBottom:8}}>
+                                {lab.brief.split('·')[0].replace('Instructor: ','').trim()}
+                              </div>
+                            )}
+                            {/* Milestone progress if any */}
+                            {lab.progress > 0 && (
+                              <div style={{marginTop:8,marginBottom:4}}>
+                                <div style={{display:'flex',justifyContent:'space-between',marginBottom:4}}>
+                                  <span style={{fontFamily:'var(--font-mono)',fontSize:10,letterSpacing:'.06em',textTransform:'uppercase',color:'var(--ink-muted)'}}>Milestones</span>
+                                  <span style={{fontFamily:'var(--font-mono)',fontSize:10,color:'var(--ink-muted)'}}>{lab.progress}%</span>
+                                </div>
+                                <div style={{height:4,background:'var(--bg-tint)',borderRadius:99,overflow:'hidden'}}>
+                                  <div style={{height:'100%',width:lab.progress+'%',background:'var(--purple)',borderRadius:99}} />
+                                </div>
+                              </div>
+                            )}
+                            {/* Semester progress bar for active labs */}
+                            {semProgress && semProgress.phase !== 'done' && semProgress.phase !== 'pre' && lab.status === 'in_progress' && (
+                              <SemesterProgressBar progress={semProgress} />
+                            )}
+                            <div style={{display:'flex',alignItems:'center',gap:8,marginTop:10,paddingTop:10,borderTop:'1px solid var(--rule)'}}>
+                              <div className="cap-bar-track" style={{maxWidth:80}}>
+                                <div className="cap-bar-fill" style={{width:Math.min(100,(lab.enrolled/Math.max(lab.capacity,1)*100))+'%'}}></div>
+                              </div>
+                              <span style={{fontFamily:'var(--font-mono)',fontSize:11,color:'var(--ink-muted)'}}>{lab.enrolled||0}/{lab.capacity||0}</span>
                             </div>
-                            <span style={{fontFamily:'var(--font-mono)',fontSize:11,color:'var(--ink-muted)'}}>{lab.enrolled||0}/{lab.capacity||0}</span>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
-              /* ── Table view ── */
               <table className="table">
                 <thead><tr>
-                  <th>Name</th><th>Semester</th><th>Instructor</th><th>Students</th><th>Status</th>
+                  <th>Name</th><th>Semester</th><th>Instructor</th><th>Students</th><th>Progress</th><th>Status</th>
                 </tr></thead>
                 <tbody>
-                  {filtered.map(lab => (
-                    <tr key={lab.id} onClick={() => openLab(lab)} style={{cursor:'pointer'}}>
-                      <td className="lead">{lab.title}</td>
-                      <td style={{fontFamily:'var(--font-mono)',fontSize:12}}>{lab.semester}</td>
-                      <td style={{fontSize:13,color:'var(--ink-soft)'}}>
-                        {lab.brief?.startsWith('Instructor:')
-                          ? lab.brief.split('·')[0].replace('Instructor: ','').trim()
-                          : '—'}
-                      </td>
-                      <td style={{fontFamily:'var(--font-mono)',fontSize:12}}>{lab.enrolled||0}</td>
-                      <td>{statusPill(lab.status)}</td>
-                    </tr>
-                  ))}
+                  {filtered.map(lab => {
+                    const sp = useSemesterProgress(lab.semester, semList);
+                    return (
+                      <tr key={lab.id} onClick={() => openLab(lab)} style={{cursor:'pointer'}}>
+                        <td className="lead">{lab.title}</td>
+                        <td style={{fontFamily:'var(--font-mono)',fontSize:12}}>{lab.semester}</td>
+                        <td style={{fontSize:13,color:'var(--ink-soft)'}}>
+                          {lab.brief?.startsWith('Instructor:') ? lab.brief.split('·')[0].replace('Instructor: ','').trim() : '—'}
+                        </td>
+                        <td style={{fontFamily:'var(--font-mono)',fontSize:12}}>{lab.enrolled||0}</td>
+                        <td>
+                          {sp && sp.phase !== 'done' && sp.phase !== 'pre' && lab.status === 'in_progress'
+                            ? <span style={{fontFamily:'var(--font-mono)',fontSize:11,color:'var(--purple)'}}>{sp.label}</span>
+                            : lab.progress > 0
+                              ? <span style={{fontFamily:'var(--font-mono)',fontSize:11,color:'var(--ink-muted)'}}>{lab.progress}%</span>
+                              : '—'
+                          }
+                        </td>
+                        <td>{statusPill(lab.status)}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             )}
@@ -1186,75 +1377,190 @@ function PageChangeLabs() {
       </div>
 
       {/* ── ChangeLab detail modal ── */}
-      {selectedLab && (
-        <div className="log-modal-backdrop" onClick={() => setSelectedLab(null)}>
-          <div className="log-modal" style={{maxWidth:740}} onClick={e => e.stopPropagation()}>
-            <div className="log-modal-header">
-              <div style={{flex:1,minWidth:0}}>
-                <div className="eyebrow" style={{marginBottom:8}}>
-                  <span className="dot"></span>{selectedLab.semester}
+      {selectedLab && (() => {
+        const semProgress = useSemesterProgress(selectedLab.semester, semList);
+        const completedCount = (milestones||[]).filter(m=>m.completed).length;
+        const totalCount = (milestones||[]).length;
+        return (
+          <div className="log-modal-backdrop" onClick={() => setSelectedLab(null)}>
+            <div className="log-modal" style={{maxWidth:760}} onClick={e => e.stopPropagation()}>
+              <div className="log-modal-header">
+                <div style={{flex:1,minWidth:0}}>
+                  <div className="eyebrow" style={{marginBottom:8}}><span className="dot"></span>{selectedLab.semester}</div>
+                  <h2 style={{fontFamily:'var(--font-display)',fontSize:26,fontWeight:500,letterSpacing:'-.015em'}}>{selectedLab.title}</h2>
+                  {selectedLab.brief?.startsWith('Instructor:') && (
+                    <p style={{fontFamily:'var(--font-mono)',fontSize:12,color:'var(--ink-muted)',marginTop:6}}>
+                      {selectedLab.brief.split('·')[0].replace('Instructor: ','').trim()}
+                    </p>
+                  )}
                 </div>
-                <h2 style={{fontFamily:'var(--font-display)',fontSize:26,fontWeight:500,letterSpacing:'-.015em'}}>{selectedLab.title}</h2>
-                {selectedLab.brief?.startsWith('Instructor:') && (
-                  <p style={{fontFamily:'var(--font-mono)',fontSize:12,color:'var(--ink-muted)',marginTop:6}}>
-                    {selectedLab.brief.split('·')[0].replace('Instructor: ','').trim()}
-                  </p>
-                )}
+                <div style={{display:'flex',gap:8,alignItems:'flex-start',flexShrink:0}}>
+                  {statusPill(selectedLab.status)}
+                  <button className="log-modal-close" onClick={() => setSelectedLab(null)}>✕</button>
+                </div>
               </div>
-              <div style={{display:'flex',gap:8,alignItems:'flex-start',flexShrink:0}}>
-                {statusPill(selectedLab.status)}
-                <button className="log-modal-close" onClick={() => setSelectedLab(null)}>✕</button>
-              </div>
-            </div>
 
-            {/* Stats row */}
-            <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,padding:'16px 0',borderTop:'1px solid var(--rule)',borderBottom:'1px solid var(--rule)'}}>
-              <div style={{textAlign:'center'}}>
-                <div style={{fontFamily:'var(--font-display)',fontSize:32,fontWeight:500,color:'var(--purple)'}}>{selectedLab.enrolled||0}</div>
-                <div style={{fontFamily:'var(--font-mono)',fontSize:11,letterSpacing:'.1em',textTransform:'uppercase',color:'var(--ink-muted)',marginTop:4}}>Students</div>
-              </div>
-              <div style={{textAlign:'center'}}>
-                <div style={{fontFamily:'var(--font-display)',fontSize:32,fontWeight:500}}>{selectedLab.capacity||0}</div>
-                <div style={{fontFamily:'var(--font-mono)',fontSize:11,letterSpacing:'.1em',textTransform:'uppercase',color:'var(--ink-muted)',marginTop:4}}>Capacity</div>
-              </div>
-              <div style={{textAlign:'center'}}>
-                <div style={{fontFamily:'var(--font-display)',fontSize:32,fontWeight:500,color:'var(--success)'}}>{selectedLab.progress||0}%</div>
-                <div style={{fontFamily:'var(--font-mono)',fontSize:11,letterSpacing:'.1em',textTransform:'uppercase',color:'var(--ink-muted)',marginTop:4}}>Progress</div>
-              </div>
-            </div>
-
-            {/* Roster */}
-            <div style={{overflowY:'auto',maxHeight:'45vh'}}>
-              <div className="card-sub" style={{marginBottom:10,marginTop:4}}>Enrolled students</div>
-              {rosterLoading ? (
-                <div style={{padding:'20px 0',color:'var(--ink-muted)',fontSize:14}}>Loading roster…</div>
-              ) : !roster || roster.length === 0 ? (
-                <div style={{padding:'20px 0',color:'var(--ink-muted)',fontSize:14}}>No roster data on file.</div>
-              ) : (
-                <table className="table" style={{fontSize:13}}>
-                  <thead><tr>
-                    <th>Name</th><th>Major</th><th>Class</th><th>Email</th>
-                  </tr></thead>
-                  <tbody>
-                    {roster.map(s => (
-                      <tr key={s.id}>
-                        <td className="lead">{s.name}</td>
-                        <td style={{color:'var(--ink-soft)'}}>{s.major||'—'}</td>
-                        <td style={{fontFamily:'var(--font-mono)',fontSize:11}}>{s.class_level||'—'}</td>
-                        <td style={{fontFamily:'var(--font-mono)',fontSize:11}}>{s.email||'—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              {/* Semester progress */}
+              {semProgress && (
+                <div style={{padding:'14px 0',borderTop:'1px solid var(--rule)',borderBottom:'1px solid var(--rule)'}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+                    <span style={{fontFamily:'var(--font-mono)',fontSize:11,letterSpacing:'.1em',textTransform:'uppercase',color:'var(--ink-muted)'}}>Semester progress</span>
+                    <span style={{fontFamily:'var(--font-mono)',fontSize:11,color:'var(--ink-muted)'}}>{semProgress.label} · {semProgress.pct}%</span>
+                  </div>
+                  <div style={{height:8,background:'var(--bg-tint)',borderRadius:99,overflow:'hidden',marginBottom:6}}>
+                    <div style={{height:'100%',width:semProgress.pct+'%',background:'var(--purple)',borderRadius:99,transition:'width 400ms'}} />
+                  </div>
+                  <div style={{display:'flex',justifyContent:'space-between',fontFamily:'var(--font-mono)',fontSize:10,color:'var(--ink-muted)'}}>
+                    <span>Start {selectedLab.semester.startsWith('SP') ? semProgress.sem?.start_date : semProgress.sem?.start_date}</span>
+                    {semProgress.sem?.spring_break_start && <span>🌴 Break {semProgress.sem.spring_break_start}</span>}
+                    {semProgress.sem?.fall_break_start && <span>🍂 Break {semProgress.sem.fall_break_start}</span>}
+                    {semProgress.sem?.finals_start && <span>📝 Finals {semProgress.sem.finals_start}</span>}
+                    <span>End {semProgress.sem?.end_date}</span>
+                  </div>
+                </div>
               )}
-            </div>
 
-            <div style={{display:'flex',justifyContent:'flex-end',paddingTop:16,borderTop:'1px solid var(--rule)'}}>
-              <button className="btn btn-soft" onClick={() => setSelectedLab(null)}>Close</button>
+              {/* Stats */}
+              <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,padding:'14px 0',borderBottom:'1px solid var(--rule)'}}>
+                <div style={{textAlign:'center'}}>
+                  <div style={{fontFamily:'var(--font-display)',fontSize:32,fontWeight:500,color:'var(--purple)'}}>{selectedLab.enrolled||0}</div>
+                  <div style={{fontFamily:'var(--font-mono)',fontSize:11,letterSpacing:'.1em',textTransform:'uppercase',color:'var(--ink-muted)',marginTop:4}}>Students</div>
+                </div>
+                <div style={{textAlign:'center'}}>
+                  <div style={{fontFamily:'var(--font-display)',fontSize:32,fontWeight:500,color: totalCount > 0 ? 'var(--success)' : 'var(--ink-muted)'}}>
+                    {totalCount > 0 ? `${completedCount}/${totalCount}` : '—'}
+                  </div>
+                  <div style={{fontFamily:'var(--font-mono)',fontSize:11,letterSpacing:'.1em',textTransform:'uppercase',color:'var(--ink-muted)',marginTop:4}}>Milestones</div>
+                </div>
+                <div style={{textAlign:'center'}}>
+                  <div style={{fontFamily:'var(--font-display)',fontSize:32,fontWeight:500,color:'var(--success)'}}>{selectedLab.progress||0}%</div>
+                  <div style={{fontFamily:'var(--font-mono)',fontSize:11,letterSpacing:'.1em',textTransform:'uppercase',color:'var(--ink-muted)',marginTop:4}}>Complete</div>
+                </div>
+              </div>
+
+              <div style={{overflowY:'auto',maxHeight:'45vh',display:'flex',flexDirection:'column',gap:20}}>
+
+                {/* Milestones */}
+                <div style={{paddingTop:14}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+                    <div className="card-sub">Semester milestones</div>
+                    {isAdmin && (
+                      <button className="btn btn-soft" style={{padding:'6px 12px',fontSize:12}}
+                        onClick={() => setAddingMilestone(v => !v)}>
+                        {addingMilestone ? 'Cancel' : '+ Add milestone'}
+                      </button>
+                    )}
+                  </div>
+
+                  {addingMilestone && isAdmin && (
+                    <div style={{display:'flex',gap:10,marginBottom:12,padding:'12px 14px',background:'var(--purple-soft)',borderRadius:'var(--r-md)'}}>
+                      <input
+                        placeholder="Milestone title"
+                        value={newMilestone.title}
+                        onChange={e => setNewMilestone(m => ({...m, title: e.target.value}))}
+                        style={{flex:1,padding:'7px 10px',border:'1px solid var(--rule)',borderRadius:'var(--r-sm)',fontSize:13,fontFamily:'var(--font-body)'}}
+                      />
+                      <input
+                        type="date"
+                        value={newMilestone.due_date}
+                        onChange={e => setNewMilestone(m => ({...m, due_date: e.target.value}))}
+                        style={{padding:'7px 10px',border:'1px solid var(--rule)',borderRadius:'var(--r-sm)',fontSize:13,fontFamily:'var(--font-body)'}}
+                      />
+                      <button className="btn btn-primary" style={{padding:'7px 14px',fontSize:13}} onClick={addMilestone} disabled={saving}>
+                        {saving ? '…' : 'Add'}
+                      </button>
+                    </div>
+                  )}
+
+                  {milestonesLoading ? (
+                    <div style={{color:'var(--ink-muted)',fontSize:14}}>Loading milestones…</div>
+                  ) : !milestones || milestones.length === 0 ? (
+                    <div style={{color:'var(--ink-muted)',fontSize:14,fontStyle:'italic'}}>
+                      No milestones yet{isAdmin ? ' — add one above' : ''}.
+                    </div>
+                  ) : (
+                    <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                      {milestones.map(m => (
+                        <div key={m.id} style={{
+                          display:'flex',alignItems:'center',gap:12,padding:'10px 14px',
+                          borderRadius:'var(--r-md)',
+                          background: m.completed ? '#e3f1ea' : 'var(--bg-tint)',
+                          border: m.completed ? '1px solid #b8dfc8' : '1px solid var(--rule)',
+                          transition:'all 200ms'
+                        }}>
+                          {isAdmin ? (
+                            <button
+                              onClick={() => toggleMilestone(m.id)}
+                              style={{
+                                width:20,height:20,borderRadius:4,flexShrink:0,cursor:'pointer',
+                                background: m.completed ? 'var(--success)' : 'white',
+                                border: m.completed ? '2px solid var(--success)' : '2px solid var(--rule)',
+                                display:'flex',alignItems:'center',justifyContent:'center',
+                                color:'white',fontSize:13,fontWeight:700,transition:'all 150ms'
+                              }}
+                            >{m.completed ? '✓' : ''}</button>
+                          ) : (
+                            <div style={{
+                              width:20,height:20,borderRadius:4,flexShrink:0,
+                              background: m.completed ? 'var(--success)' : 'var(--rule)',
+                              display:'flex',alignItems:'center',justifyContent:'center',
+                              color:'white',fontSize:13,fontWeight:700
+                            }}>{m.completed ? '✓' : ''}</div>
+                          )}
+                          <div style={{flex:1}}>
+                            <div style={{
+                              fontSize:14,fontWeight:m.completed ? 500 : 400,
+                              color: m.completed ? 'var(--success)' : 'var(--ink)',
+                              textDecoration: m.completed ? 'none' : 'none'
+                            }}>{m.title}</div>
+                            <div style={{fontFamily:'var(--font-mono)',fontSize:11,color:'var(--ink-muted)',marginTop:2}}>
+                              Due {new Date(m.due_date).toLocaleDateString('en-US',{month:'short',day:'numeric'})}
+                              {m.completed && m.completed_by_name && ` · Completed by ${m.completed_by_name}`}
+                            </div>
+                          </div>
+                          {isAdmin && (
+                            <button onClick={() => deleteMilestone(m.id)}
+                              style={{color:'var(--ink-muted)',fontSize:16,padding:'0 4px',opacity:.5}}
+                              title="Delete milestone">✕</button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Roster */}
+                <div style={{borderTop:'1px solid var(--rule)',paddingTop:14}}>
+                  <div className="card-sub" style={{marginBottom:10}}>Enrolled students</div>
+                  {rosterLoading ? (
+                    <div style={{color:'var(--ink-muted)',fontSize:14}}>Loading roster…</div>
+                  ) : !roster || roster.length === 0 ? (
+                    <div style={{color:'var(--ink-muted)',fontSize:14}}>No roster data on file.</div>
+                  ) : (
+                    <table className="table" style={{fontSize:13}}>
+                      <thead><tr><th>Name</th><th>Major</th><th>Class</th><th>Email</th></tr></thead>
+                      <tbody>
+                        {roster.map(s => (
+                          <tr key={s.id}>
+                            <td className="lead">{s.name}</td>
+                            <td style={{color:'var(--ink-soft)'}}>{s.major||'—'}</td>
+                            <td style={{fontFamily:'var(--font-mono)',fontSize:11}}>{s.class_level||'—'}</td>
+                            <td style={{fontFamily:'var(--font-mono)',fontSize:11}}>{s.email||'—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
+
+              <div style={{display:'flex',justifyContent:'flex-end',paddingTop:16,borderTop:'1px solid var(--rule)'}}>
+                <button className="btn btn-soft" onClick={() => setSelectedLab(null)}>Close</button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
