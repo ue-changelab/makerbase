@@ -2,7 +2,9 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import pool from '../db.js';
+
 const router = Router();
+
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'email and password required' });
@@ -10,9 +12,38 @@ router.post('/login', async (req, res) => {
   if (!rows[0]) return res.status(401).json({ error: 'Invalid credentials' });
   const ok = await bcrypt.compare(password, rows[0].password);
   if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
-  const token = jwt.sign({ id: rows[0].id, email: rows[0].email, role: rows[0].role, name: rows[0].name, initials: rows[0].initials }, process.env.JWT_SECRET, { expiresIn: '8h' });
+  const token = jwt.sign(
+    { id: rows[0].id, email: rows[0].email, role: rows[0].role, name: rows[0].name, initials: rows[0].initials },
+    process.env.JWT_SECRET,
+    { expiresIn: '24h' }
+  );
   res.json({ token, user: { id: rows[0].id, name: rows[0].name, initials: rows[0].initials, role: rows[0].role, email: rows[0].email } });
 });
+
+// Refresh — takes a still-valid token and issues a fresh 24h one
+router.post('/refresh', async (req, res) => {
+  const h = req.headers.authorization;
+  if (!h?.startsWith('Bearer ')) return res.status(401).json({ error: 'No token' });
+  try {
+    const payload = jwt.verify(h.slice(7), process.env.JWT_SECRET);
+    // Make sure user still exists and hasn't been deactivated
+    const { rows } = await pool.query(
+      'SELECT id, name, initials, email, role FROM users WHERE id=$1',
+      [payload.id]
+    );
+    if (!rows[0]) return res.status(401).json({ error: 'User not found' });
+    const token = jwt.sign(
+      { id: rows[0].id, email: rows[0].email, role: rows[0].role, name: rows[0].name, initials: rows[0].initials },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+    res.json({ token, user: rows[0] });
+  } catch (err) {
+    if (err.name === 'TokenExpiredError') return res.status(401).json({ error: 'Token expired' });
+    res.status(401).json({ error: 'Invalid token' });
+  }
+});
+
 router.get('/me', async (req, res) => {
   const h = req.headers.authorization;
   if (!h?.startsWith('Bearer ')) return res.status(401).json({ error: 'No token' });
@@ -21,4 +52,5 @@ router.get('/me', async (req, res) => {
   if (!rows[0]) return res.status(401).json({ error: 'User not found' });
   res.json({ user: rows[0] });
 });
+
 export default router;

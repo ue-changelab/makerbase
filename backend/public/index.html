@@ -385,9 +385,16 @@ function PageImport() {
   async function doImport() {
     if (!file) return;
     setLoading(true);
-    const form = new FormData();
-    form.append('file', file);
     try {
+      // Refresh token before a potentially long import so it doesn't expire mid-request
+      try {
+        const refreshed = await api('POST', '/api/auth/refresh');
+        localStorage.setItem('mb_token', refreshed.token);
+      } catch (_) {
+        // If refresh fails (already expired) the import will fail with a clear error
+      }
+      const form = new FormData();
+      form.append('file', file);
       const r = await api('POST', '/api/import', form, true);
       setResult({ ok: true, ...r });
       setFile(null);
